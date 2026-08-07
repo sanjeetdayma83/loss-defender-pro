@@ -1,0 +1,9 @@
+{
+  "name": "loss-defender-pro",
+  "private": true,
+  "version": "3.0.0",
+  "workspaces": ["backend"],
+  "scripts": {
+    "dev:backend": "npm run start:dev --workspace=backend"
+  }
+}

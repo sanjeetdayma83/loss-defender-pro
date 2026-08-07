@@ -1,0 +1,29 @@
+version: "3.9"
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ldp
+      POSTGRES_PASSWORD: ldp
+      POSTGRES_DB: loss_defender_pro
+    ports: ["5432:5432"]
+    volumes: ["pgdata:/var/lib/postgresql/data"]
+    # NOTE: local dev only. Production DATABASE_URL points to Neon — remove
+    # this service from prod compose (see infra/DEPLOY.md).
+
+  redis:
+    image: redis:7-alpine
+    ports: ["6379:6379"]
+
+  backend:
+    build: ./backend
+    env_file: ./backend/.env
+    ports: ["3000:3000"]
+    depends_on: [postgres, redis]
+
+  # Flutter Web build output (flutter build web) gets served as static files by
+  # Nginx in production — see infra/nginx/nginx.conf. No separate container needed
+  # for web; Android/iOS/Windows/macOS builds are native app installs, not services.
+
+volumes:
+  pgdata:

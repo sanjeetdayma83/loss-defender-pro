@@ -1,0 +1,379 @@
+import 'package:dio/dio.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:go_router/go_router.dart';
+import '../../../core/network/api_client.dart';
+import '../../../core/theme/app_theme.dart';
+
+class ScannerScreen extends StatefulWidget {
+  final String? orderId;
+  const ScannerScreen({super.key, this.orderId});
+
+  @override
+  State<ScannerScreen> createState() => _ScannerScreenState();
+}
+
+class _ScannerScreenState extends State<ScannerScreen> {
+  final _barcodeCtrl = TextEditingController();
+  final _focusNode = FocusNode();
+  Map<String, dynamic>? _order;
+  Map<String, dynamic>? _lastScan;
+  bool _loading = false;
+  bool _scanning = false;
+  String? _error;
+  String? _success;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.orderId != null && widget.orderId!.isNotEmpty) {
+      _loadOrder(widget.orderId!);
+    }
+  }
+
+  @override
+  void dispose() {
+    _barcodeCtrl.dispose();
+    _focusNode.dispose();
+    super.dispose();
+  }
+
+  Future<void> _loadOrder(String id) async {
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+    try {
+      final res = await ApiClient.instance.dio.get('/orders/$id');
+      final body = res.data;
+      final data = body is Map && body['data'] != null ? body['data'] : body;
+      setState(() => _order = Map<String, dynamic>.from(data as Map));
+    } on DioException catch (e) {
+      setState(() => _error = _extractError(e) ?? 'Failed to load order');
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  Future<void> _scan() async {
+    final code = _barcodeCtrl.text.trim();
+    if (code.isEmpty || _order == null) return;
+
+    setState(() {
+      _scanning = true;
+      _error = null;
+      _success = null;
+    });
+    try {
+      final res = await ApiClient.instance.dio.post(
+        '/orders/${_order!['id']}/scan',
+        data: {'barcodeOrSku': code},
+      );
+      final body = res.data;
+      final data = body is Map && body['data'] != null ? body['data'] : body;
+
+      setState(() {
+        _lastScan = data['scan'] is Map
+            ? Map<String, dynamic>.from(data['scan'] as Map)
+            : null;
+        if (data['order'] is Map) {
+          _order = Map<String, dynamic>.from(data['order'] as Map);
+        }
+        final sku = _lastScan?['sku'] ?? code;
+        final scanned = _lastScan?['scannedQty'];
+        final qty = _lastScan?['qty'];
+        final allMatched = _lastScan?['allMatched'] == true;
+        _success = allMatched
+            ? 'All items matched · Order scanned'
+            : 'Scanned $sku ($scanned/$qty)';
+        _barcodeCtrl.clear();
+      });
+      _focusNode.requestFocus();
+    } on DioException catch (e) {
+      setState(() => _error = _extractError(e) ?? 'Scan failed');
+      _focusNode.requestFocus();
+    } finally {
+      if (mounted) setState(() => _scanning = false);
+    }
+  }
+
+  String? _extractError(DioException e) {
+    final data = e.response?.data;
+    if (data is Map) {
+      final err = data['error'];
+      if (err is Map && err['message'] != null) {
+        final m = err['message'];
+        if (m is Map && m['message'] != null) return m['message'].toString();
+        return m.toString();
+      }
+      if (data['message'] != null) return data['message'].toString();
+    }
+    return e.message;
+  }
+
+  Color _statusColor(String? s) {
+    switch (s) {
+      case 'matched':
+      case 'scanned':
+      case 'dispatched':
+        return AppColors.success;
+      case 'partial':
+      case 'packing':
+      case 'recording':
+        return AppColors.warning;
+      case 'mismatch':
+      case 'claimed':
+        return AppColors.danger;
+      default:
+        return AppColors.textSecondary;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isWide = MediaQuery.of(context).size.width >= 700;
+
+    if (_loading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    // No order selected → pick from list
+    if (_order == null) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.qr_code_scanner, size: 64, color: AppColors.textSecondary.withOpacity(0.5)),
+              const SizedBox(height: 16),
+              const Text('Select an order to start scanning',
+                  style: TextStyle(fontSize: 16, color: AppColors.textSecondary)),
+              const SizedBox(height: 20),
+              FilledButton.icon(
+                onPressed: () => context.go('/orders'),
+                icon: const Icon(Icons.list_alt),
+                label: const Text('Go to Orders'),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    final items = (_order!['items'] as List?) ?? [];
+    final allMatched = items.isNotEmpty &&
+        items.every((i) {
+          final m = i as Map;
+          return (m['scannedQty'] as int? ?? 0) >= (m['qty'] as int? ?? 0);
+        });
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        return SingleChildScrollView(
+          padding: EdgeInsets.all(isWide ? 24 : 16),
+          child: ConstrainedBox(
+            constraints: BoxConstraints(minHeight: constraints.maxHeight - 48),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                // Order header card
+                Card(
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                _order!['customerName']?.toString() ?? 'Order',
+                                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                'ID: ${_order!['id']?.toString().substring(0, 8)}…',
+                                style: const TextStyle(color: AppColors.textSecondary, fontSize: 12),
+                              ),
+                            ],
+                          ),
+                        ),
+                        Chip(
+                          label: Text(
+                            _order!['status']?.toString() ?? '',
+                            style: const TextStyle(color: Colors.white, fontSize: 12),
+                          ),
+                          backgroundColor: _statusColor(_order!['status']?.toString()),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+
+                // Items progress
+                Text(
+                  'Items (${items.length})',
+                  style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15),
+                ),
+                const SizedBox(height: 8),
+                ...items.map((raw) {
+                  final m = raw as Map;
+                  final qty = m['qty'] as int? ?? 0;
+                  final scanned = m['scannedQty'] as int? ?? 0;
+                  final done = scanned >= qty && qty > 0;
+                  final progress = qty > 0 ? (scanned / qty).clamp(0.0, 1.0) : 0.0;
+
+                  return Card(
+                    margin: const EdgeInsets.only(bottom: 8),
+                    child: Padding(
+                      padding: const EdgeInsets.all(12),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Icon(
+                                done ? Icons.check_circle : Icons.radio_button_unchecked,
+                                color: done ? AppColors.success : AppColors.textSecondary,
+                                size: 22,
+                              ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      '${m['sku']} — ${m['name']}',
+                                      style: const TextStyle(fontWeight: FontWeight.w600),
+                                    ),
+                                    if (m['barcode'] != null)
+                                      Text(
+                                        'Barcode: ${m['barcode']}',
+                                        style: const TextStyle(
+                                          fontSize: 12,
+                                          color: AppColors.textSecondary,
+                                        ),
+                                      ),
+                                  ],
+                                ),
+                              ),
+                              Text(
+                                '$scanned / $qty',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  color: done ? AppColors.success : AppColors.warning,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 8),
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(4),
+                            child: LinearProgressIndicator(
+                              value: progress,
+                              minHeight: 6,
+                              backgroundColor: AppColors.border,
+                              color: done ? AppColors.success : AppColors.accent,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                }),
+
+                const SizedBox(height: 20),
+
+                // Scan input
+                if (!allMatched) ...[
+                  TextField(
+                    controller: _barcodeCtrl,
+                    focusNode: _focusNode,
+                    autofocus: true,
+                    textInputAction: TextInputAction.done,
+                    decoration: InputDecoration(
+                      labelText: 'Scan / Enter Barcode or SKU',
+                      hintText: 'Focus here and scan',
+                      prefixIcon: const Icon(Icons.qr_code_scanner),
+                      border: const OutlineInputBorder(),
+                      suffixIcon: _scanning
+                          ? const Padding(
+                              padding: EdgeInsets.all(12),
+                              child: SizedBox(
+                                width: 20,
+                                height: 20,
+                                child: CircularProgressIndicator(strokeWidth: 2),
+                              ),
+                            )
+                          : IconButton(
+                              icon: const Icon(Icons.send),
+                              onPressed: _scan,
+                            ),
+                    ),
+                    onSubmitted: (_) => _scan(),
+                    inputFormatters: [
+                      FilteringTextInputFormatter.deny(RegExp(r'\s')),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  SizedBox(
+                    height: 48,
+                    child: FilledButton.icon(
+                      onPressed: _scanning ? null : _scan,
+                      icon: const Icon(Icons.qr_code),
+                      label: Text(_scanning ? 'Scanning…' : 'Confirm Scan'),
+                    ),
+                  ),
+                ] else ...[
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: AppColors.success.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: AppColors.success.withOpacity(0.3)),
+                    ),
+                    child: const Row(
+                      children: [
+                        Icon(Icons.verified, color: AppColors.success, size: 28),
+                        SizedBox(width: 12),
+                        Expanded(
+                          child: Text(
+                            'All items matched · Order is scanned',
+                            style: TextStyle(
+                              color: AppColors.success,
+                              fontWeight: FontWeight.w600,
+                              fontSize: 15,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+
+                if (_success != null) ...[
+                  const SizedBox(height: 12),
+                  Text(_success!,
+                      style: const TextStyle(color: AppColors.success, fontWeight: FontWeight.w600)),
+                ],
+                if (_error != null) ...[
+                  const SizedBox(height: 12),
+                  Text(_error!, style: const TextStyle(color: AppColors.danger)),
+                ],
+
+                const SizedBox(height: 24),
+                OutlinedButton.icon(
+                  onPressed: () => context.go('/orders'),
+                  icon: const Icon(Icons.arrow_back),
+                  label: const Text('Back to Orders'),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+}

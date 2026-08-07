@@ -1,0 +1,24 @@
+﻿# Node
+node_modules/
+npm-debug.log*
+
+# Environment
+.env
+*.env
+
+# Backend
+backend/node_modules/
+backend/dist/
+backend/coverage/
+
+# Flutter
+frontend/.dart_tool/
+frontend/build/
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
