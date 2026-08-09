@@ -74,8 +74,9 @@ export class AuthService {
       data: {
         companyName: dto.companyName,
         email: dto.email,
+        phone: dto.phone ?? '',
         status: 'active',
-        plan: this.defaultPlan(),
+        plan: 'free' as any,
       } as any,
     });
 
@@ -100,7 +101,11 @@ export class AuthService {
         expiresAt: new Date(Date.now() + 15 * 60 * 1000),
       },
     });
-    await this.emailService.sendPasswordResetOtp(dto.email, code);
+    try {
+      await this.emailService.sendPasswordResetOtp(dto.email, code);
+    } catch (e: any) {
+      console.error('[register] email send failed (non-fatal):', e?.message || e);
+    }
 
     const tokens = await this.tokensFor(user, undefined, ip);
     return {
@@ -240,7 +245,11 @@ export class AuthService {
           expiresAt: new Date(Date.now() + 15 * 60 * 1000),
         },
       });
+      try {
       await this.emailService.sendPasswordResetOtp(dto.email, code);
+    } catch (e: any) {
+      console.error('[register] email send failed (non-fatal):', e?.message || e);
+    }
       return { ok: true };
     }
     return { ok: true };

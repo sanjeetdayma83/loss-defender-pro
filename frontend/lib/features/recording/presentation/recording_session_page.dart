@@ -1,5 +1,7 @@
+import 'dart:typed_data';
 import 'package:camera/camera.dart';
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:permission_handler/permission_handler.dart';
 import '../../../core/network/api_client.dart';
@@ -21,6 +23,7 @@ class _RecordingSessionPageState extends State<RecordingSessionPage> {
   bool _busy = false;
   String? _recordingId;
   String? _error;
+  String? _status;
   Duration _elapsed = Duration.zero;
   DateTime? _startedAt;
 
@@ -30,23 +33,35 @@ class _RecordingSessionPageState extends State<RecordingSessionPage> {
     _initCamera();
   }
 
+  @override
+  void dispose() {
+    _cam?.dispose();
+    super.dispose();
+  }
+
   Future<void> _initCamera() async {
     try {
-      final status = await Permission.camera.request();
-      if (!status.isGranted) {
-        setState(() => _error = 'Camera permission denied');
-        return;
+      if (!kIsWeb) {
+        final status = await Permission.camera.request();
+        if (!status.isGranted) {
+          setState(() => _error = 'Camera permission denied');
+          return;
+        }
       }
       final cams = await availableCameras();
       if (cams.isEmpty) {
-        setState(() => _error = 'No camera found');
+        setState(() => _error = 'No camera found (web may need HTTPS/permission)');
         return;
       }
       final back = cams.firstWhere(
         (c) => c.lensDirection == CameraLensDirection.back,
         orElse: () => cams.first,
       );
-      final ctrl = CameraController(back, ResolutionPreset.medium, enableAudio: true);
+      final ctrl = CameraController(
+        back,
+        ResolutionPreset.medium,
+        enableAudio: true,
+      );
       await ctrl.initialize();
       if (!mounted) return;
       setState(() {
@@ -68,29 +83,36 @@ class _RecordingSessionPageState extends State<RecordingSessionPage> {
   }
 
   Future<void> _start() async {
-    setState(() { _busy = true; _error = null; });
+    setState(() {
+      _busy = true;
+      _error = null;
+      _status = null;
+    });
     try {
-      // Prefer passed ids; else pick first order + warehouse from API
       String? orderId = widget.orderId;
       String? warehouseId = widget.warehouseId;
 
       if (orderId == null || warehouseId == null) {
         final ordersRes = await ApiClient.instance.dio.get('/orders');
         final oBody = ordersRes.data;
-        final oList = oBody is Map && oBody['data'] is List ? oBody['data'] as List : <dynamic>[];
+        final oList = oBody is Map && oBody['data'] is List
+            ? oBody['data'] as List
+            : (oBody is List ? oBody : <dynamic>[]);
         if (oList.isNotEmpty) {
           orderId ??= (oList.first as Map)['id']?.toString();
         }
         final whRes = await ApiClient.instance.dio.get('/warehouses');
         final wBody = whRes.data;
-        final wList = wBody is Map && wBody['data'] is List ? wBody['data'] as List : <dynamic>[];
+        final wList = wBody is Map && wBody['data'] is List
+            ? wBody['data'] as List
+            : (wBody is List ? wBody : <dynamic>[]);
         if (wList.isNotEmpty) {
           warehouseId ??= (wList.first as Map)['id']?.toString();
         }
       }
 
       if (orderId == null || warehouseId == null) {
-        setState(() => _error = 'Need at least one order + warehouse');
+        setState(() => _error = 'Need orderId + warehouseId');
         return;
       }
 
@@ -106,7 +128,7 @@ class _RecordingSessionPageState extends State<RecordingSessionPage> {
         try {
           await _cam!.startVideoRecording();
         } catch (_) {
-          // Web may not support video file — still track API session
+          // Web may not support file recording — session still tracked
         }
       }
 
@@ -133,8 +155,63 @@ class _RecordingSessionPageState extends State<RecordingSessionPage> {
     });
   }
 
+  Future<int> _uploadSegment(String rid, XFile? file, int sequence) async {
+    if (file == null) return 0;
+
+    setState(() => _status = 'Getting upload URL…');
+    final presignRes = await ApiClient.instance.dio.post(
+      '/recordings/$rid/segments/presign',
+      data: {
+        'segmentIndex': sequence,
+        'contentType': 'video/webm',
+      },
+    );
+    final pBody = presignRes.data;
+    final p = pBody is Map && pBody['data'] != null ? pBody['data'] : pBody;
+    if (p is! Map) return 0;
+
+    final configured = p['configured'] == true;
+    final uploadUrl = p['uploadUrl']?.toString();
+    final key = p['key']?.toString();
+    if (!configured || uploadUrl == null || key == null) {
+      setState(() => _status = 'B2 not configured — segment skipped');
+      return 0;
+    }
+
+    setState(() => _status = 'Uploading segment…');
+    final bytes = await file.readAsBytes();
+    final size = bytes.length;
+
+    // Direct PUT to B2/S3 presigned URL (no auth header)
+    final put = Dio();
+    await put.put(
+      uploadUrl,
+      data: Stream.fromIterable([bytes]),
+      options: Options(
+        headers: {
+          'Content-Type': 'video/webm',
+          'Content-Length': size,
+        },
+        contentType: 'video/webm',
+      ),
+    );
+
+    setState(() => _status = 'Registering segment…');
+    await ApiClient.instance.dio.post('/recordings/$rid/segments', data: {
+      'sequence': sequence,
+      'b2Key': key,
+      'sizeBytes': size,
+      'durationSec': _elapsed.inSeconds,
+    });
+
+    return size;
+  }
+
   Future<void> _stop() async {
-    setState(() => _busy = true);
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
     try {
       XFile? file;
       if (_cam != null && _cam!.value.isRecordingVideo) {
@@ -144,44 +221,51 @@ class _RecordingSessionPageState extends State<RecordingSessionPage> {
       }
 
       final rid = _recordingId;
+      var uploadedBytes = 0;
+      if (rid != null && file != null) {
+        try {
+          uploadedBytes = await _uploadSegment(rid, file, 0);
+        } catch (e) {
+          setState(() => _status = 'Upload failed: $e (still stopping session)');
+        }
+      }
+
       if (rid != null) {
+        setState(() => _status = 'Finalizing…');
         await ApiClient.instance.dio.post('/recordings/$rid/stop', data: {
           'durationSec': _elapsed.inSeconds,
-          'segmentCount': 1,
+          'segmentCount': uploadedBytes > 0 ? 1 : 0,
         });
       }
 
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(file != null
-                ? 'Recording saved · ${file.path.split(RegExp(r"[/\\]")).last}'
-                : 'Session stopped · evidence created'),
-          ),
-        );
-        Navigator.of(context).pop(true);
-      }
+      if (!mounted) return;
+      setState(() {
+        _recording = false;
+        _status = uploadedBytes > 0
+            ? 'Saved + uploaded (${(uploadedBytes / 1024).toStringAsFixed(1)} KB)'
+            : 'Session stopped (no file upload)';
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(uploadedBytes > 0
+              ? 'Recording uploaded & evidence linked'
+              : 'Recording stopped (upload skipped — check B2 / camera file)'),
+        ),
+      );
+      await Future.delayed(const Duration(milliseconds: 600));
+      if (mounted) Navigator.pop(context, true);
     } on DioException catch (e) {
       setState(() => _error = e.message ?? 'Stop failed');
     } finally {
-      if (mounted) {
-        setState(() {
-          _recording = false;
-          _busy = false;
-        });
-      }
+      if (mounted) setState(() => _busy = false);
     }
-  }
-
-  @override
-  void dispose() {
-    _cam?.dispose();
-    super.dispose();
   }
 
   String _fmt(Duration d) {
     final m = d.inMinutes.remainder(60).toString().padLeft(2, '0');
     final s = d.inSeconds.remainder(60).toString().padLeft(2, '0');
+    final h = d.inHours;
+    if (h > 0) return '$h:$m:$s';
     return '$m:$s';
   }
 
@@ -192,65 +276,73 @@ class _RecordingSessionPageState extends State<RecordingSessionPage> {
       appBar: AppBar(
         backgroundColor: Colors.black,
         foregroundColor: Colors.white,
-        title: Text(_recording ? 'Recording… ${_fmt(_elapsed)}' : 'Recording Session'),
+        title: const Text('Recording Session'),
       ),
       body: Column(
         children: [
           Expanded(
-            child: _error != null && !_camReady
-                ? Center(child: Text(_error!, style: const TextStyle(color: Colors.redAccent)))
-                : !_camReady
-                    ? const Center(child: CircularProgressIndicator(color: Colors.white))
-                    : Stack(
-                        fit: StackFit.expand,
-                        children: [
-                          CameraPreview(_cam!),
-                          if (_recording)
-                            Positioned(
-                              top: 16,
-                              left: 16,
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                                decoration: BoxDecoration(
-                                  color: AppColors.danger,
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
-                                child: Row(
-                                  children: [
-                                    const Icon(Icons.fiber_manual_record, color: Colors.white, size: 14),
-                                    const SizedBox(width: 6),
-                                    Text(_fmt(_elapsed),
-                                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
-                                  ],
-                                ),
-                              ),
+            child: !_camReady
+                ? Center(
+                    child: Text(
+                      _error ?? 'Starting camera…',
+                      style: const TextStyle(color: Colors.white70),
+                    ),
+                  )
+                : Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      CameraPreview(_cam!),
+                      if (_recording)
+                        Positioned(
+                          top: 16,
+                          left: 16,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 10, vertical: 6),
+                            decoration: BoxDecoration(
+                              color: Colors.red.shade700,
+                              borderRadius: BorderRadius.circular(8),
                             ),
-                          if (_error != null)
-                            Positioned(
-                              bottom: 16,
-                              left: 16,
-                              right: 16,
-                              child: Text(_error!,
-                                  textAlign: TextAlign.center,
-                                  style: const TextStyle(color: Colors.orangeAccent)),
+                            child: Row(
+                              children: [
+                                const Icon(Icons.fiber_manual_record,
+                                    color: Colors.white, size: 14),
+                                const SizedBox(width: 6),
+                                Text(_fmt(_elapsed),
+                                    style: const TextStyle(
+                                        color: Colors.white,
+                                        fontWeight: FontWeight.w700)),
+                              ],
                             ),
-                        ],
-                      ),
+                          ),
+                        ),
+                      if (_status != null)
+                        Positioned(
+                          bottom: 48,
+                          left: 16,
+                          right: 16,
+                          child: Text(_status!,
+                              textAlign: TextAlign.center,
+                              style: const TextStyle(color: Colors.lightGreenAccent)),
+                        ),
+                      if (_error != null)
+                        Positioned(
+                          bottom: 16,
+                          left: 16,
+                          right: 16,
+                          child: Text(_error!,
+                              textAlign: TextAlign.center,
+                              style: const TextStyle(color: Colors.orangeAccent)),
+                        ),
+                    ],
+                  ),
           ),
           Container(
             color: Colors.black,
             padding: const EdgeInsets.fromLTRB(24, 16, 24, 32),
             child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                IconButton(
-                  iconSize: 28,
-                  color: Colors.white,
-                  icon: const Icon(Icons.cameraswitch),
-                  onPressed: () async {
-                    // simple: re-init opposite camera
-                  },
-                ),
                 GestureDetector(
                   onTap: _busy ? null : _toggle,
                   child: Container(
@@ -267,12 +359,6 @@ class _RecordingSessionPageState extends State<RecordingSessionPage> {
                       size: 36,
                     ),
                   ),
-                ),
-                IconButton(
-                  iconSize: 28,
-                  color: Colors.white,
-                  icon: const Icon(Icons.flash_on),
-                  onPressed: () {},
                 ),
               ],
             ),

@@ -1,8 +1,11 @@
-﻿import {
-  Injectable, NotFoundException, BadRequestException, ConflictException,
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+  ConflictException,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { OrderStatus } from '@prisma/client';
+import { OrderItemStatus, OrderStatus } from '@prisma/client';
 import { tenantWhere } from '../common/utils/tenant';
 
 @Injectable()
@@ -25,6 +28,15 @@ export class ScannerService {
     const code = barcode.trim();
     if (!code) throw new BadRequestException('Empty barcode');
 
+    if (
+      !['synced', 'queued', 'packing', 'recording', 'scanned'].includes(
+        String(order.status),
+      )
+    ) {
+      throw new BadRequestException(`Cannot scan in status ${order.status}`);
+    }
+
+    // Duplicate barcode event (same code on order)
     const prior = await this.prisma.scanEvent.findFirst({
       where: { companyId, orderId, barcode: code },
     });
@@ -49,6 +61,47 @@ export class ScannerService {
     if (match) result = 'matched';
     else if (expectedSku && expectedSku !== code) result = 'wrong_sku';
 
+    // Same source of truth as OrdersService.scan — update scannedQty
+    let scanPayload: any = null;
+    if (match) {
+      if (match.scannedQty >= match.qty) {
+        throw new ConflictException(`SKU ${match.sku} already fully scanned`);
+      }
+      const newQty = match.scannedQty + 1;
+      const itemStatus: OrderItemStatus =
+        newQty >= match.qty ? 'matched' : 'partial';
+
+      await this.prisma.orderItem.update({
+        where: { id: match.id },
+        data: { scannedQty: newQty, status: itemStatus },
+      });
+
+      const refreshed = await this.prisma.order.findFirst({
+        where: { id: orderId },
+        include: { items: true },
+      });
+      const allMatched = refreshed!.items.every((i) => i.scannedQty >= i.qty);
+      if (allMatched) {
+        await this.prisma.order.update({
+          where: { id: orderId },
+          data: { status: 'scanned' as OrderStatus },
+        });
+      } else if (['synced', 'queued'].includes(String(refreshed!.status))) {
+        await this.prisma.order.update({
+          where: { id: orderId },
+          data: { status: 'packing' as OrderStatus },
+        });
+      }
+
+      scanPayload = {
+        sku: match.sku,
+        scannedQty: newQty,
+        qty: match.qty,
+        itemStatus,
+        allMatched,
+      };
+    }
+
     const event = await this.prisma.scanEvent.create({
       data: {
         companyId,
@@ -61,24 +114,21 @@ export class ScannerService {
       },
     });
 
-    if (result === 'matched') {
-      const cur = String(order.status).toLowerCase();
-      if (cur === 'queued' || cur === 'synced') {
-        await this.prisma.order.update({
-          where: { id: orderId },
-          data: { status: 'scanned' as OrderStatus },
-        });
-      }
-    }
-
     return {
       event,
       result,
+      scan: scanPayload,
       alert:
         result === 'wrong_sku'
-          ? { type: 'WRONG_SKU', message: `Expected ${expectedSku}, got ${code}` }
+          ? {
+              type: 'WRONG_SKU',
+              message: `Expected ${expectedSku}, got ${code}`,
+            }
           : result === 'unknown'
-            ? { type: 'UNKNOWN_BARCODE', message: 'Barcode not in order items' }
+            ? {
+                type: 'UNKNOWN_BARCODE',
+                message: 'Barcode not in order items',
+              }
             : null,
       orderStatus: order.status,
     };
