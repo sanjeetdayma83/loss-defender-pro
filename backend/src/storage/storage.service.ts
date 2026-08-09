@@ -1,4 +1,4 @@
-﻿import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import {
   S3Client,
@@ -24,7 +24,7 @@ export class StorageService {
     const appKey =
       this.config.get<string>('B2_APP_KEY') ||
       this.config.get<string>('B2_APPLICATION_KEY');
-    const bucket = this.config.get<string>('B2_BUCKET');
+    const bucket = this.config.get<string>('B2_BUCKET') || this.config.get<string>('B2_BUCKET_NAME');
     const endpoint = this.config.get<string>('B2_ENDPOINT');
     const region = this.config.get<string>('B2_REGION') || 'us-east-005';
 

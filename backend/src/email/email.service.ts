@@ -1,69 +1,62 @@
 ﻿import { Injectable, Logger } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
-import * as nodemailer from 'nodemailer';
 
 @Injectable()
 export class EmailService {
-  private readonly logger = new Logger(EmailService.name);
-  private transporter: nodemailer.Transporter | null = null;
-  private from: string;
+  private readonly log = new Logger(EmailService.name);
 
-  constructor(private readonly config: ConfigService) {
-    const host = this.config.get<string>('SMTP_HOST');
-    const port = this.config.get<number>('SMTP_PORT') || 587;
-    const user = this.config.get<string>('SMTP_USER');
-    const pass = this.config.get<string>('SMTP_PASS');
-    this.from = this.config.get<string>('SMTP_FROM') || 'Loss Defender Pro <noreply@localhost>';
-
-    if (host && user && pass && !pass.includes('PLACE_YOUR')) {
-      this.transporter = nodemailer.createTransport({
-        host,
-        port,
-        secure: false, // 587 = STARTTLS
-        auth: { user, pass },
-      });
-      this.logger.log(`SMTP configured → ${host}:${port}`);
-    } else {
-      this.logger.warn('SMTP not configured — emails will be logged only');
+  async send(to: string, subject: string, text: string) {
+    const host = process.env.SMTP_HOST;
+    if (!host) {
+      this.log.warn(`[DEV MAIL] to=${to} | ${subject}\n${text}`);
+      return { mock: true };
     }
-  }
-
-  async sendMail(to: string, subject: string, html: string, text?: string) {
-    if (!this.transporter) {
-      this.logger.warn(`[DEV EMAIL] To: ${to} | Subject: ${subject}`);
-      this.logger.warn(text || html);
-      return { success: false, dev: true };
-    }
-
     try {
-      const info = await this.transporter.sendMail({
-        from: this.from,
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      const nodemailer = require('nodemailer');
+      const transporter = nodemailer.createTransport({
+        host,
+        port: Number(process.env.SMTP_PORT ?? 587),
+        secure: process.env.SMTP_SECURE === 'true',
+        auth: {
+          user: process.env.SMTP_USER,
+          pass: process.env.SMTP_PASS,
+        },
+      });
+      await transporter.sendMail({
+        from: process.env.SMTP_FROM ?? process.env.SMTP_USER,
         to,
         subject,
-        html,
-        text: text || html.replace(/<[^>]*>/g, ''),
+        text,
       });
-      this.logger.log(`Email sent → ${to} | id: ${info.messageId}`);
-      return { success: true, messageId: info.messageId };
+      return { mock: false };
     } catch (e: any) {
-      this.logger.error(`Email failed → ${to}: ${e.message}`);
-      return { success: false, error: e.message };
+      this.log.error(`SMTP failed: ${e?.message}`);
+      this.log.warn(`[FALLBACK DEV MAIL] to=${to}\n${text}`);
+      return { mock: true };
     }
   }
 
-  async sendPasswordResetOtp(to: string, code: string) {
-    const subject = 'Password Reset Code — Loss Defender Pro';
-    const html = `
-      <div style="font-family: Arial, sans-serif; max-width: 480px; margin: 0 auto;">
-        <h2>Password Reset</h2>
-        <p>Your one-time code is:</p>
-        <div style="font-size: 32px; font-weight: bold; letter-spacing: 6px; margin: 20px 0;">
-          ${code}
-        </div>
-        <p>This code expires in <strong>15 minutes</strong>.</p>
-        <p style="color:#666; font-size:13px;">If you did not request this, you can safely ignore this email.</p>
-      </div>
-    `;
-    return this.sendMail(to, subject, html);
+  sendPasswordResetOtp(to: string, code: string) {
+    return this.send(
+      to,
+      'Password reset code',
+      `Your Loss Defender Pro code is ${code}. Valid for 15 minutes.`,
+    );
+  }
+
+  sendVerifyEmailOtp(to: string, code: string) {
+    return this.send(
+      to,
+      'Verify your email',
+      `Your verification code is ${code}. Valid for 15 minutes.`,
+    );
+  }
+
+  sendInvite(to: string, link: string) {
+    return this.send(
+      to,
+      'You are invited to Loss Defender Pro',
+      `Accept your invite: ${link}`,
+    );
   }
 }

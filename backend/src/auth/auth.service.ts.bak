@@ -112,7 +112,6 @@ export class AuthService {
       email: user.email,
       companyId: company.id,
       requiresVerification: true,
-      ...(process.env.NODE_ENV !== 'production' ? { devCode: code } : {}),
     };
   }
 
@@ -186,10 +185,6 @@ export class AuthService {
     }
     if (session.user.status === 'deleted' || session.user.status === 'suspended') {
       throw new ForbiddenException('User disabled');
-    }
-
-    if (session.deviceId && dto.deviceId && session.deviceId !== dto.deviceId) {
-      throw new UnauthorizedException('Device mismatch');
     }
 
     await this.prisma.refreshSession.update({
@@ -372,35 +367,6 @@ export class AuthService {
         data: { revokedAt: new Date() },
       });
     }
-    return { ok: true };
-  }
-  async acceptInvite(dto: { token: string; name: string; password: string }) {
-    const tokenHash = createHash('sha256').update(dto.token).digest('hex');
-    const inv = await this.prisma.inviteToken.findFirst({
-      where: {
-        tokenHash,
-        usedAt: null,
-        expiresAt: { gt: new Date() },
-      } as any,
-    });
-    if (!inv) throw new BadRequestException('Invalid or expired invite');
-
-    const passwordHash = await bcrypt.hash(dto.password, 12);
-    await this.prisma.$transaction([
-      this.prisma.user.update({
-        where: { id: (inv as any).userId },
-        data: {
-          passwordHash,
-          name: dto.name,
-          status: 'active',
-          emailVerifiedAt: new Date(),
-        } as any,
-      }),
-      this.prisma.inviteToken.update({
-        where: { id: (inv as any).id },
-        data: { usedAt: new Date() } as any,
-      }),
-    ]);
     return { ok: true };
   }
 }

@@ -17,10 +17,8 @@ import { ClaimsModule } from './claims/claims.module';
 import { ReturnsModule } from './returns/returns.module';
 import { ScannerModule } from './scanner/scanner.module';
 import { AlertsModule } from './alerts/alerts.module';
+import { EmailModule } from './email/email.module';
 import { QueuesModule } from './queues/queues.module';
-import { EmailProcessor } from './queues/email.processor';
-import { EvidenceProcessor } from './queues/evidence.processor';
-import { NotificationProcessor } from './queues/notification.processor';
 import { MarketplaceModule } from './marketplace/marketplace.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { RealtimeModule } from './realtime/realtime.module';
@@ -30,6 +28,7 @@ import { RealtimeModule } from './realtime/realtime.module';
     ConfigModule.forRoot({ isGlobal: true, load: [configuration] }),
     ThrottlerModule.forRoot([{ ttl: 60000, limit: 100 }]),
     PrismaModule,
+    EmailModule,
     QueuesModule,
     RealtimeModule,
     AuditModule,
@@ -49,6 +48,6 @@ import { RealtimeModule } from './realtime/realtime.module';
     MarketplaceModule,
     NotificationsModule,
   ],
-  providers: [EmailProcessor, EvidenceProcessor, NotificationProcessor],
+  
 })
 export class AppModule {}

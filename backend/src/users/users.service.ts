@@ -5,13 +5,15 @@ import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { InviteUserDto, UpdateUserDto } from './dto/user.dto';
 import * as bcrypt from 'bcrypt';
-import { randomBytes } from 'crypto';
+import { randomBytes, createHash } from 'crypto';
+import { EmailService } from '../email/email.service';
 
 @Injectable()
 export class UsersService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
+    private readonly emailService: EmailService,
   ) {}
 
   async list(companyId: string) {
@@ -154,6 +156,16 @@ export class UsersService {
       },
     });
 
+    const rawToken = randomBytes(32).toString('hex');
+    const tokenHash = createHash('sha256').update(rawToken).digest('hex');
+    await this.prisma.inviteToken.create({
+      data: {
+        userId: created.id,
+        tokenHash,
+        expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+      },
+    });
+
     await this.audit.log({
       companyId,
       actorId,
@@ -164,7 +176,12 @@ export class UsersService {
       ipAddress: ip,
     });
 
-    return { ...created, tempPassword: tempPass };
+    return {
+      ...created,
+      ...(process.env.NODE_ENV !== 'production'
+        ? { inviteToken: rawToken, tempPassword: tempPass }
+        : {}),
+    };
   }
 
   async update(
@@ -220,5 +237,27 @@ export class UsersService {
     });
 
     return updated;
+  }
+
+  async acceptInvite(token: string, newPassword: string) {
+    const tokenHash = createHash('sha256').update(token).digest('hex');
+    const invite = await this.prisma.inviteToken.findFirst({
+      where: { tokenHash, usedAt: null, expiresAt: { gt: new Date() } },
+    });
+    if (!invite) throw new NotFoundException('Invalid or expired invite token');
+
+    const hash = await bcrypt.hash(newPassword, 12);
+    const user = await this.prisma.user.update({
+      where: { id: invite.userId },
+      data: { passwordHash: hash, status: 'active' },
+      select: { id: true, email: true, name: true, role: true, status: true, companyId: true },
+    });
+
+    await this.prisma.inviteToken.update({
+      where: { id: invite.id },
+      data: { usedAt: new Date() },
+    });
+
+    return user;
   }
 }

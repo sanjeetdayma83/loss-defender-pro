@@ -1,30 +1,31 @@
-import { Module } from '@nestjs/common';
+﻿import { Module } from '@nestjs/common';
 import { BullModule } from '@nestjs/bullmq';
-import { ConfigModule, ConfigService } from '@nestjs/config';
+import { EmailModule } from '../email/email.module';
+import { EmailProcessor } from './email.processor';
+import { EvidenceProcessor } from './evidence.processor';
+import { NotificationProcessor } from './notification.processor';
 
 export const QUEUE_EMAIL = 'email';
 export const QUEUE_EVIDENCE = 'evidence';
-export const QUEUE_NOTIFICATION = 'notification';
+export const QUEUE_NOTIFY = 'notify';
+export const QUEUE_NOTIFICATION = 'notify';
 
 @Module({
   imports: [
-    BullModule.forRootAsync({
-      imports: [ConfigModule],
-      inject: [ConfigService],
-      useFactory: (config: ConfigService) => ({
-        connection: {
-          host: config.get<string>('REDIS_HOST') || '127.0.0.1',
-          port: parseInt(config.get<string>('REDIS_PORT') || '6379', 10),
-          password: config.get<string>('REDIS_PASSWORD') || undefined,
-        },
-      }),
+    EmailModule,
+    BullModule.forRoot({
+      connection: {
+        host: process.env.REDIS_HOST || '127.0.0.1',
+        port: Number(process.env.REDIS_PORT || 6379),
+      },
     }),
     BullModule.registerQueue(
-      { name: QUEUE_EMAIL },
-      { name: QUEUE_EVIDENCE },
-      { name: QUEUE_NOTIFICATION },
+      { name: 'email' },
+      { name: 'evidence' },
+      { name: 'notify' },
     ),
   ],
-  exports: [BullModule],
+  providers: [EmailProcessor, EvidenceProcessor, NotificationProcessor],
+  exports: [BullModule, EmailModule],
 })
 export class QueuesModule {}
