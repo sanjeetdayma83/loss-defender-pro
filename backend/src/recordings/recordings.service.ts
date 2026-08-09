@@ -70,6 +70,24 @@ export class RecordingsService {
     return rec;
   }
 
+  private async recomputeTotals(recordingId: string) {
+    const segs = await this.prisma.recordingSegment.findMany({
+      where: { recordingId },
+    });
+    let total = BigInt(0);
+    for (const s of segs) {
+      total += BigInt(s.sizeBytes?.toString() ?? '0');
+    }
+    await this.prisma.recording.update({
+      where: { id: recordingId },
+      data: {
+        segmentCount: segs.length,
+        totalBytes: total,
+      } as any,
+    });
+    return { segmentCount: segs.length, totalBytes: total.toString() };
+  }
+
   async addSegment(
     companyId: string,
     recordingId: string,
@@ -86,7 +104,9 @@ export class RecordingsService {
     });
     if (!rec) throw new NotFoundException('Recording not found');
     if (!['started', 'paused', 'completed'].includes(String(rec.status))) {
-      throw new BadRequestException(`Cannot add segment in status ${rec.status}`);
+      throw new BadRequestException(
+        `Cannot add segment in status ${rec.status}`,
+      );
     }
 
     const segment = await this.prisma.recordingSegment.upsert({
@@ -114,15 +134,66 @@ export class RecordingsService {
       },
     });
 
-    const count = await this.prisma.recordingSegment.count({
-      where: { recordingId },
-    });
-    await this.prisma.recording.update({
-      where: { id: recordingId },
-      data: { segmentCount: count },
+    await this.recomputeTotals(recordingId);
+    return segment;
+  }
+
+  /**
+   * Link each uploaded segment as an EvidenceFrame (pack key = segment object).
+   * True pixel-frame extraction (ffmpeg) is optional next; this makes evidence
+   * downloadable and consistent with B2 objects that exist.
+   */
+  private async syncEvidenceFromSegments(
+    companyId: string,
+    rec: { id: string; orderId: string },
+    segs: Array<{ sequence: number; b2Key: string; durationSec: number | null; checksum: string | null }>,
+  ) {
+    const evidence = await this.prisma.evidence.upsert({
+      where: { recordingId: rec.id },
+      create: {
+        companyId,
+        orderId: rec.orderId,
+        recordingId: rec.id,
+        status: segs.length > 0 ? 'ready' : 'pending',
+        frameCount: segs.length,
+        packKey: segs[0]?.b2Key ?? null,
+      },
+      update: {
+        status: segs.length > 0 ? 'ready' : 'pending',
+        frameCount: segs.length,
+        packKey: segs[0]?.b2Key ?? null,
+      },
     });
 
-    return segment;
+    for (const seg of segs) {
+      const existing = await this.prisma.evidenceFrame.findFirst({
+        where: { evidenceId: evidence.id, sequence: seg.sequence },
+      });
+      if (!existing) {
+        await this.prisma.evidenceFrame.create({
+          data: {
+            evidenceId: evidence.id,
+            companyId,
+            sequence: seg.sequence,
+            b2Key: seg.b2Key,
+            timestampMs:
+              seg.durationSec != null ? seg.durationSec * 1000 : null,
+            label: `segment_${seg.sequence}`,
+            checksum: seg.checksum ?? null,
+          },
+        });
+      } else if (existing.b2Key !== seg.b2Key) {
+        await this.prisma.evidenceFrame.update({
+          where: { id: existing.id },
+          data: { b2Key: seg.b2Key, checksum: seg.checksum ?? null },
+        });
+      }
+    }
+
+    return this.prisma.evidence.findFirst({
+      where: { id: evidence.id },
+      include: { frames: { orderBy: { sequence: 'asc' } } },
+    });
   }
 
   async stop(
@@ -137,13 +208,14 @@ export class RecordingsService {
     });
     if (!rec) throw new NotFoundException('Recording not found');
 
-    const segs = (rec as any).segments as any[];
-    const actualCount = segs?.length ?? segmentCount ?? 0;
+    const segs = ((rec as any).segments ?? []) as any[];
+    const totals = await this.recomputeTotals(recordingId);
 
     const data: any = {
       status: 'completed',
       completedAt: new Date(),
-      segmentCount: actualCount,
+      segmentCount: totals.segmentCount,
+      totalBytes: BigInt(totals.totalBytes),
     };
     if (durationSec != null) data.durationSec = durationSec;
 
@@ -162,50 +234,11 @@ export class RecordingsService {
       });
     }
 
-    // Evidence: real segment keys → EvidenceFrame rows
     let evidence: any = null;
     try {
-      evidence = await this.prisma.evidence.upsert({
-        where: { recordingId: rec.id },
-        create: {
-          companyId,
-          orderId: rec.orderId,
-          recordingId: rec.id,
-          status: actualCount > 0 ? 'ready' : 'pending',
-          frameCount: actualCount,
-          packKey: segs?.[0]?.b2Key ?? null,
-        },
-        update: {
-          status: actualCount > 0 ? 'ready' : 'pending',
-          frameCount: actualCount,
-          packKey: segs?.[0]?.b2Key ?? null,
-        },
-      });
-
-      // Sync frames from uploaded segments
-      for (const seg of segs || []) {
-        const existing = await this.prisma.evidenceFrame.findFirst({
-          where: {
-            evidenceId: evidence.id,
-            sequence: seg.sequence,
-          },
-        });
-        if (!existing) {
-          await this.prisma.evidenceFrame.create({
-            data: {
-              evidenceId: evidence.id,
-              companyId,
-              sequence: seg.sequence,
-              b2Key: seg.b2Key,
-              timestampMs: seg.durationSec != null ? seg.durationSec * 1000 : null,
-              label: `segment_${seg.sequence}`,
-              checksum: seg.checksum ?? null,
-            },
-          });
-        }
-      }
+      evidence = await this.syncEvidenceFromSegments(companyId, rec, segs);
     } catch (e: any) {
-      console.error('evidence create', e?.message);
+      console.error('evidence sync', e?.message);
     }
 
     try {
@@ -215,7 +248,12 @@ export class RecordingsService {
       });
     } catch (_) {}
 
-    return { recording: updated, evidence, segmentCount: actualCount };
+    return {
+      recording: updated,
+      evidence,
+      segmentCount: totals.segmentCount,
+      totalBytes: totals.totalBytes,
+    };
   }
 
   async presignSegment(
