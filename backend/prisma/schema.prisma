@@ -609,3 +609,22 @@ model Notification {
   @@index([companyId, status])
   @@map("notifications")
 }
+
+model PasswordHistory {
+  id           String   @id @default(uuid())
+  userId       String
+  passwordHash String
+  createdAt    DateTime @default(now())
+  @@index([userId])
+  @@map("password_history")
+}
+
+model TokenBlacklist {
+  id        String   @id @default(uuid())
+  jti       String   @unique
+  userId    String?
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  @@index([expiresAt])
+  @@map("token_blacklist")
+}
