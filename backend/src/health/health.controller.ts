@@ -1,7 +1,7 @@
-import { Controller, Get } from "@nestjs/common";
-import { Public } from "../common/decorators/public.decorator";
-import { PrismaService } from "../prisma/prisma.service";
-import { StorageService } from "../storage/storage.service";
+﻿import { Controller, Get } from '@nestjs/common';
+import { Public } from '../common/decorators/public.decorator';
+import { PrismaService } from '../prisma/prisma.service';
+import { StorageService } from '../storage/storage.service';
 
 @Controller()
 export class HealthController {
@@ -11,27 +11,51 @@ export class HealthController {
   ) {}
 
   @Public()
-  @Get("health")
+  @Get('health')
   health() {
-    return { status: "ok", service: "loss-defender-pro", ts: new Date().toISOString() };
+    return {
+      status: 'ok',
+      service: 'loss-defender-pro',
+      ts: new Date().toISOString(),
+    };
   }
 
   @Public()
-  @Get("ready")
+  @Get('ready')
   async ready() {
-    let db = false;
+    let database = false;
+    let redis = false;
+
     try {
       await this.prisma.$queryRaw`SELECT 1`;
-      db = true;
+      database = true;
     } catch {
-      db = false;
+      database = false;
     }
+
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      const Redis = require('ioredis');
+      const client = new Redis({
+        host: process.env.REDIS_HOST || '127.0.0.1',
+        port: Number(process.env.REDIS_PORT || 6379),
+        maxRetriesPerRequest: 1,
+        connectTimeout: 2000,
+        lazyConnect: true,
+      });
+      await client.connect();
+      redis = (await client.ping()) === 'PONG';
+      await client.quit();
+    } catch {
+      redis = false;
+    }
+
+    const storage = this.storage.isConfigured?.() ?? false;
+    const status = !database ? 'not_ready' : redis ? 'ready' : 'degraded';
+
     return {
-      status: db ? "ready" : "degraded",
-      checks: {
-        database: db,
-        storage: this.storage.isConfigured(),
-      },
+      status,
+      checks: { database, redis, storage },
       ts: new Date().toISOString(),
     };
   }

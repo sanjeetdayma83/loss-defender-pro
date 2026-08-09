@@ -1,4 +1,6 @@
-import { Module } from '@nestjs/common';
+import { RequestIdMiddleware } from './common/middleware/request-id.middleware';
+import { MiddlewareConsumer, NestModule, Module } from '@nestjs/common';
+
 import { ConfigModule } from '@nestjs/config';
 import { ThrottlerModule } from '@nestjs/throttler';
 import configuration from './config/configuration';
@@ -50,4 +52,8 @@ import { RealtimeModule } from './realtime/realtime.module';
   ],
   
 })
-export class AppModule {}
+export class AppModule implements NestModule {
+  configure(consumer: MiddlewareConsumer) {
+    consumer.apply(RequestIdMiddleware).forRoutes('*');
+  }
+}
