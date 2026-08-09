@@ -176,11 +176,19 @@ export class UsersService {
       ipAddress: ip,
     });
 
+    const appUrl = process.env.APP_URL || 'http://localhost:8080';
+    const acceptUrl = `${appUrl}/accept-invite?token=${rawToken}`;
+    try {
+      await this.emailService.sendInvite(created.email, acceptUrl);
+    } catch (e: any) {
+      console.error('[invite] email failed:', e?.message || e);
+    }
+
     return {
       ...created,
       ...(process.env.NODE_ENV !== 'production'
-        ? { inviteToken: rawToken, tempPassword: tempPass }
-        : {}),
+        ? { inviteToken: rawToken, tempPassword: tempPass, acceptUrl }
+        : { invited: true, emailSent: true }),
     };
   }
 
