@@ -182,15 +182,15 @@ export class OrdersService {
     });
 
     const refreshed = await this.prisma.order.findFirst({
-      where: { id: orderId },
+      where: { id: orderId, companyId },
       include: { items: true },
     });
 
     const allMatched = refreshed!.items.every((i) => i.scannedQty >= i.qty);
     if (allMatched) {
-      await this.prisma.order.update({ where: { id: orderId }, data: { status: 'scanned' } });
+      await this.prisma.order.update({ where: { id: orderId, companyId }, data: { status: 'scanned' } });
     } else if (['synced', 'queued'].includes(refreshed!.status)) {
-      await this.prisma.order.update({ where: { id: orderId }, data: { status: 'packing' } });
+      await this.prisma.order.update({ where: { id: orderId, companyId }, data: { status: 'packing' } });
     }
 
     const result = await this.getOne(companyId, orderId);

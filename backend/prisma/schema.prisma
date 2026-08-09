@@ -104,14 +104,16 @@ model Company {
   createdAt    DateTime      @default(now())
   updatedAt    DateTime      @updatedAt
 
-  users      User[]
-  warehouses Warehouse[]
-  auditLogs  AuditLog[]
-  orders     Order[]
-  recordings Recording[]
-  evidence   Evidence[]
-  Claim      Claim[]
-  Return     Return[]
+  users                 User[]
+  warehouses            Warehouse[]
+  auditLogs             AuditLog[]
+  orders                Order[]
+  recordings            Recording[]
+  evidence              Evidence[]
+  claims                Claim[]
+  returns               Return[]
+  MarketplaceConnection MarketplaceConnection[]
+  Notification          Notification[]
 
   @@index([status])
 }
@@ -168,6 +170,7 @@ model User {
   phone            String
   email            String     @unique
   passwordHash     String
+  emailVerifiedAt  DateTime?
   role             Role       @default(packing_operator)
   warehouseId      String?
   warehouse        Warehouse? @relation(fields: [warehouseId], references: [id])
@@ -186,7 +189,8 @@ model User {
   auditLogs          AuditLog[]
   assignedOrders     Order[]                  @relation("OrderOperator")
   recordings         Recording[]              @relation("RecordingOperator")
-  RefreshSession     RefreshSession[]
+  refreshSessions    RefreshSession[]
+  Notification       Notification[]
 
   @@index([companyId, status])
 }
@@ -287,8 +291,8 @@ model Order {
   items      OrderItem[]
   recordings Recording[]
   evidence   Evidence[]
-  Claim      Claim[]
-  Return     Return[]
+  claims     Claim[]
+  returns    Return[]
 
   @@index([companyId, status])
   @@index([companyId, warehouseId])
@@ -533,4 +537,75 @@ model ScanEvent {
 
   @@index([companyId, orderId, barcode])
   @@map("scan_events")
+}
+
+enum MarketplaceProvider {
+  amazon
+  flipkart
+  shopify
+  manual
+  other
+}
+
+enum MarketplaceConnectionStatus {
+  connected
+  disconnected
+  error
+  pending
+}
+
+model MarketplaceConnection {
+  id            String                      @id @default(uuid())
+  companyId     String
+  provider      MarketplaceProvider
+  storeName     String?
+  externalId    String?
+  accessToken   String?
+  refreshToken  String?
+  webhookSecret String?
+  status        MarketplaceConnectionStatus @default(pending)
+  lastSyncAt    DateTime?
+  meta          Json?
+  createdAt     DateTime                    @default(now())
+  updatedAt     DateTime                    @updatedAt
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([companyId])
+  @@map("marketplace_connections")
+}
+
+enum NotificationChannel {
+  in_app
+  email
+  sms
+  push
+  whatsapp
+}
+
+enum NotificationStatus {
+  pending
+  sent
+  failed
+  read
+}
+
+model Notification {
+  id        String              @id @default(uuid())
+  companyId String
+  userId    String?
+  channel   NotificationChannel @default(in_app)
+  title     String
+  body      String
+  data      Json?
+  status    NotificationStatus  @default(pending)
+  readAt    DateTime?
+  createdAt DateTime            @default(now())
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  user    User?   @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([companyId, userId])
+  @@index([companyId, status])
+  @@map("notifications")
 }

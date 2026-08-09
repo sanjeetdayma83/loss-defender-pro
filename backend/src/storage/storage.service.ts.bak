@@ -1,14 +1,6 @@
 ﻿import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import {
-  S3Client,
-  PutObjectCommand,
-  GetObjectCommand,
-  CreateMultipartUploadCommand,
-  UploadPartCommand,
-  CompleteMultipartUploadCommand,
-  AbortMultipartUploadCommand,
-} from '@aws-sdk/client-s3';
+import { S3Client, PutObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { randomUUID } from 'crypto';
 
@@ -21,6 +13,7 @@ export class StorageService {
 
   constructor(private readonly config: ConfigService) {
     const keyId = this.config.get<string>('B2_KEY_ID');
+    // Support both names
     const appKey =
       this.config.get<string>('B2_APP_KEY') ||
       this.config.get<string>('B2_APPLICATION_KEY');
@@ -46,9 +39,7 @@ export class StorageService {
       this.configured = true;
       this.logger.log(`B2 storage configured → bucket=${bucket}`);
     } else {
-      this.logger.warn(
-        'B2 not configured — set B2_KEY_ID + B2_APPLICATION_KEY + B2_BUCKET + B2_ENDPOINT',
-      );
+      this.logger.warn('B2 not configured — set B2_KEY_ID + B2_APPLICATION_KEY + B2_BUCKET + B2_ENDPOINT');
     }
   }
 
@@ -66,30 +57,21 @@ export class StorageService {
   }
 
   recordingSegmentKey(companyId: string, recordingId: string, index: number) {
-    return this.buildKey(
-      companyId,
-      'recordings',
-      `${recordingId}/seg_${index}.webm`,
-    );
+    return this.buildKey(companyId, 'recordings', `${recordingId}/seg_${index}.webm`);
   }
 
   evidencePackKey(companyId: string, evidenceId: string) {
     return this.buildKey(companyId, 'evidence', `${evidenceId}/pack.json`);
   }
 
-  async presignPut(
-    key: string,
-    contentType = 'application/octet-stream',
-    expiresIn = 900,
-  ) {
+  async presignPut(key: string, contentType = 'application/octet-stream', expiresIn = 900) {
     if (!this.configured || !this.client || !this.bucket) {
       return {
         configured: false,
         uploadUrl: null as string | null,
         key,
         expiresIn,
-        message:
-          'Set B2_KEY_ID, B2_APPLICATION_KEY, B2_BUCKET, B2_ENDPOINT in .env',
+        message: 'Set B2_KEY_ID, B2_APPLICATION_KEY, B2_BUCKET, B2_ENDPOINT in .env',
       };
     }
     const cmd = new PutObjectCommand({
@@ -108,84 +90,5 @@ export class StorageService {
     const cmd = new GetObjectCommand({ Bucket: this.bucket, Key: key });
     const downloadUrl = await getSignedUrl(this.client, cmd, { expiresIn });
     return { configured: true, downloadUrl, key, expiresIn };
-  }
-
-  // ========== MULTIPART UPLOAD ==========
-
-  async initMultipart(
-    key: string,
-    contentType = 'application/octet-stream',
-  ) {
-    if (!this.configured || !this.client || !this.bucket) {
-      return { configured: false, uploadId: null, key };
-    }
-    const cmd = new CreateMultipartUploadCommand({
-      Bucket: this.bucket,
-      Key: key,
-      ContentType: contentType,
-    });
-    const res = await this.client.send(cmd);
-    return {
-      configured: true,
-      uploadId: res.UploadId!,
-      key,
-      contentType,
-    };
-  }
-
-  async presignPart(
-    key: string,
-    uploadId: string,
-    partNumber: number,
-    expiresIn = 900,
-  ) {
-    if (!this.configured || !this.client || !this.bucket) {
-      return { configured: false, uploadUrl: null as string | null };
-    }
-    const cmd = new UploadPartCommand({
-      Bucket: this.bucket,
-      Key: key,
-      UploadId: uploadId,
-      PartNumber: partNumber,
-    });
-    const uploadUrl = await getSignedUrl(this.client, cmd, { expiresIn });
-    return { configured: true, uploadUrl, partNumber, key, uploadId };
-  }
-
-  async completeMultipart(
-    key: string,
-    uploadId: string,
-    parts: { ETag: string; PartNumber: number }[],
-  ) {
-    if (!this.configured || !this.client || !this.bucket) {
-      return { configured: false };
-    }
-    const cmd = new CompleteMultipartUploadCommand({
-      Bucket: this.bucket,
-      Key: key,
-      UploadId: uploadId,
-      MultipartUpload: { Parts: parts },
-    });
-    const res = await this.client.send(cmd);
-    return {
-      configured: true,
-      key,
-      location: res.Location,
-      etag: res.ETag,
-    };
-  }
-
-  async abortMultipart(key: string, uploadId: string) {
-    if (!this.configured || !this.client || !this.bucket) {
-      return { configured: false };
-    }
-    await this.client.send(
-      new AbortMultipartUploadCommand({
-        Bucket: this.bucket,
-        Key: key,
-        UploadId: uploadId,
-      }),
-    );
-    return { configured: true, aborted: true };
   }
 }

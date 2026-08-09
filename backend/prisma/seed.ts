@@ -1,48 +1,52 @@
-import { PrismaClient } from '@prisma/client';
-import * as bcrypt from 'bcrypt';
+﻿import { PrismaClient, Role, UserStatus, CompanyPlan, CompanyStatus } from "@prisma/client";
+import * as bcrypt from "bcrypt";
 
 const prisma = new PrismaClient();
 
 async function main() {
-  const email = 'demo@lossdefender.in';
-  if (await prisma.user.findFirst({ where: { email } })) {
-    console.log('Seed skip — exists', email);
-    return;
-  }
-  const passwordHash = await bcrypt.hash('Admin@123', 12);
-  const company = await prisma.company.create({
-    data: {
-      companyName: 'Demo Logistics',
-      email,
-      phone: '+910000000000',
-      status: 'active',
-      plan: 'free' as any,
-    } as any,
+  console.log("Seeding...");
+
+  const company = await prisma.company.upsert({
+    where: { email: "owner2@test.ldp" },
+    update: {},
+    create: {
+      companyName: "Test Company 2",
+      email: "owner2@test.ldp",
+      phone: "9999999999",
+      plan: CompanyPlan.free,
+      status: CompanyStatus.active,
+    },
   });
-  await prisma.user.create({
-    data: {
+
+  const hash = await bcrypt.hash("Test@12345", 12);
+
+  const user = await prisma.user.upsert({
+    where: { email: "owner2@test.ldp" },
+    update: {
+      passwordHash: hash,
+      status: UserStatus.active,
+      role: Role.owner,
+      failedLoginCount: 0,
+      lockedUntil: null,
+    },
+    create: {
+      email: "owner2@test.ldp",
+      passwordHash: hash,
+      name: "Owner Two",
+      phone: "9999999999",
+      role: Role.owner,
+      status: UserStatus.active,
       companyId: company.id,
-      email,
-      name: 'Demo Owner',
-      phone: '+910000000000',
-      role: 'owner',
-      passwordHash,
-      status: 'active',
-      emailVerifiedAt: new Date(),
-    } as any,
+    },
   });
-  await prisma.warehouse.create({
-    data: {
-      companyId: company.id,
-      name: 'Demo WH',
-      code: 'DEMO-01',
-      city: 'Delhi',
-      state: 'DL',
-      address: { line1: 'Seed' },
-      status: 'active',
-    } as any,
-  });
-  console.log('Seeded', email, 'Admin@123');
+
+  console.log("✅ Company:", company.id, company.email);
+  console.log("✅ User:", user.id, user.email, user.role);
 }
 
-main().finally(() => prisma.$disconnect());
+main()
+  .catch((e) => {
+    console.error(e);
+    process.exit(1);
+  })
+  .finally(() => prisma.$disconnect());

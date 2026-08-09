@@ -81,6 +81,7 @@ export class OrdersController {
     return this.orders.updateStatus(user.companyId, id, user.sub, dto, req.ip);
   }
 
+  /** @deprecated Prefer POST /scanner/scan — keeps ScanEvent + scannedQty */
   @Post(':id/scan')
   @Roles(Role.owner, Role.manager, Role.supervisor, Role.packing_operator, Role.qc_operator, Role.super_admin)
   scan(@CurrentUser() user: AuthenticatedUser, @Param('id') id: string, @Body() dto: ScanItemDto, @Req() req: Request) {

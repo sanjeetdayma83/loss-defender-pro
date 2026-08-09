@@ -1,54 +1,44 @@
 import { NestFactory } from '@nestjs/core';
-
-// Prisma BigInt → JSON string
-(BigInt.prototype as any).toJSON = function () {
-  return this.toString();
-};
 import { ValidationPipe } from '@nestjs/common';
-
-// Prisma BigInt → JSON string
-(BigInt.prototype as any).toJSON = function () {
-  return this.toString();
-};
-import { AppModule } from './app.module';
-
-// Prisma BigInt → JSON string
-(BigInt.prototype as any).toJSON = function () {
-  return this.toString();
-};
-import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
-
-// Prisma BigInt → JSON string
-(BigInt.prototype as any).toJSON = function () {
-  return this.toString();
-};
-import { TransformInterceptor } from './common/interceptors/transform.interceptor';
-
-// Prisma BigInt → JSON string
-(BigInt.prototype as any).toJSON = function () {
-  return this.toString();
-};
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
+import { AppModule } from './app.module';
+import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
+import { TransformInterceptor } from './common/interceptors/transform.interceptor';
+import { validateEnv } from './config/validate-env';
 
-// Prisma BigInt → JSON string
+// Prisma BigInt → JSON (once only)
 (BigInt.prototype as any).toJSON = function () {
   return this.toString();
 };
 
 async function bootstrap() {
+  validateEnv();
+
   const app = await NestFactory.create(AppModule);
 
   const swaggerConfig = new DocumentBuilder()
-  .setTitle('Loss Defender Pro API')
-  .setDescription('Warehouse intelligence — /api/v1')
-  .setVersion('1.0')
-  .addBearerAuth()
-  .build();
-const document = SwaggerModule.createDocument(app, swaggerConfig);
-SwaggerModule.setup('api/docs', app, document);
+    .setTitle('Loss Defender Pro API')
+    .setDescription('Warehouse intelligence — /api/v1')
+    .setVersion('1.0')
+    .addBearerAuth()
+    .build();
+  const document = SwaggerModule.createDocument(app, swaggerConfig);
+  SwaggerModule.setup('api/docs', app, document);
+
+  const origins = (process.env.CORS_ORIGINS || '')
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
+  const isProd = process.env.NODE_ENV === 'production';
 
   app.enableCors({
-    origin: true,
+    origin: isProd
+      ? origins.length
+        ? origins
+        : false
+      : origins.length
+        ? origins
+        : true,
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS', 'HEAD'],
     allowedHeaders: [
