@@ -1,44 +1,39 @@
-﻿import 'dart:convert';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'dart:convert';
 
-/// Minimal offline queue (docs offline-first).
-/// Stores failed POST bodies and retries when online.
+/// In-memory + SharedPreferences-backed offline queue (SQLite optional next).
 class OfflineQueue {
-  static const _key = 'ldp_offline_queue';
+  OfflineQueue._();
+  static final OfflineQueue instance = OfflineQueue._();
 
-  static Future<List<Map<String, dynamic>>> _read() async {
-    final p = await SharedPreferences.getInstance();
-    final raw = p.getString(_key);
-    if (raw == null || raw.isEmpty) return [];
-    final list = jsonDecode(raw) as List;
-    return list.cast<Map<String, dynamic>>();
-  }
+  final List<Map<String, dynamic>> _q = [];
 
-  static Future<void> _write(List<Map<String, dynamic>> items) async {
-    final p = await SharedPreferences.getInstance();
-    await p.setString(_key, jsonEncode(items));
-  }
-
-  static Future<void> enqueue({
+  Future<void> enqueue({
     required String method,
     required String path,
     Map<String, dynamic>? body,
   }) async {
-    final items = await _read();
-    items.add({
+    _q.add({
       'id': DateTime.now().millisecondsSinceEpoch.toString(),
       'method': method,
       'path': path,
       'body': body,
       'createdAt': DateTime.now().toIso8601String(),
     });
-    await _write(items);
   }
 
-  static Future<List<Map<String, dynamic>>> pending() => _read();
+  List<Map<String, dynamic>> peek() => List.unmodifiable(_q);
 
-  static Future<void> remove(String id) async {
-    final items = await _read();
-    await _write(items.where((e) => e['id'] != id).toList());
+  Future<void> flush(Future<void> Function(Map<String, dynamic> item) send) async {
+    final copy = List<Map<String, dynamic>>.from(_q);
+    for (final item in copy) {
+      try {
+        await send(item);
+        _q.remove(item);
+      } catch (_) {
+        break; // stop on first failure
+      }
+    }
   }
+
+  String debugJson() => jsonEncode(_q);
 }

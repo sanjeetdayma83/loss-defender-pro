@@ -1,3 +1,4 @@
+import { Throttle } from '@nestjs/throttler';
 import { Controller, Get, Post, Body, Param, Req, HttpCode } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { Public } from '../common/decorators/public.decorator';
@@ -21,6 +22,7 @@ import {
 export class AuthController {
   constructor(private readonly auth: AuthService) {}
 
+  @Throttle({ default: { limit: 5, ttl: 60000 } })
   @Public()
   @Post('register')
   @ApiOperation({ summary: 'Register new company + owner' })
@@ -28,6 +30,7 @@ export class AuthController {
     return this.auth.register(dto, req.ip);
   }
 
+  @Throttle({ default: { limit: 10, ttl: 60000 } })
   @Public()
   @Post('login')
   @HttpCode(200)
@@ -51,6 +54,7 @@ export class AuthController {
     return this.auth.logout(userId, dto);
   }
 
+  @Throttle({ default: { limit: 5, ttl: 60000 } })
   @Public()
   @Post('forgot-password')
   @HttpCode(200)

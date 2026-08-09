@@ -16,6 +16,29 @@ import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 export class MarketplaceController {
   constructor(private readonly service: MarketplaceService) {}
 
+  @Get('oauth/:provider/start')
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard, TenantGuard)
+  oauthStart(
+    @Param('provider') provider: string,
+    @CurrentUser() u: AuthenticatedUser,
+  ) {
+    const state = Buffer.from(
+      [u.companyId, provider, String(Date.now())].join(':'),
+    ).toString('base64url');
+    return {
+      provider,
+      state,
+      url:
+        'https://example.com/oauth/' +
+        provider +
+        '?state=' +
+        state +
+        '&client_id=PENDING',
+      note: 'Stub — wire real OAuth credentials later',
+    };
+  }
+
   @Get('connections')
   @ApiBearerAuth()
   @UseGuards(JwtAuthGuard, TenantGuard)
@@ -27,7 +50,10 @@ export class MarketplaceController {
   @ApiBearerAuth()
   @UseGuards(JwtAuthGuard, TenantGuard)
   @Roles(Role.owner, Role.manager, Role.marketplace_manager, Role.super_admin)
-  connect(@CurrentUser() u: AuthenticatedUser, @Body() dto: ConnectMarketplaceDto) {
+  connect(
+    @CurrentUser() u: AuthenticatedUser,
+    @Body() dto: ConnectMarketplaceDto,
+  ) {
     return this.service.connect(u.companyId, dto);
   }
 
@@ -35,7 +61,10 @@ export class MarketplaceController {
   @ApiBearerAuth()
   @UseGuards(JwtAuthGuard, TenantGuard)
   @Roles(Role.owner, Role.manager, Role.marketplace_manager, Role.super_admin)
-  disconnect(@CurrentUser() u: AuthenticatedUser, @Param('id') id: string) {
+  disconnect(
+    @CurrentUser() u: AuthenticatedUser,
+    @Param('id') id: string,
+  ) {
     return this.service.disconnect(u.companyId, id);
   }
 

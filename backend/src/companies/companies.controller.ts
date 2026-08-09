@@ -1,34 +1,41 @@
-﻿import { Controller, Get, Patch, Body, Req } from '@nestjs/common';
+import {
+  Body, Controller, Get, Patch, Req, UseGuards,
+} from '@nestjs/common';
 import { CompaniesService } from './companies.service';
-import { UpdateCompanyDto } from './dto/update-company.dto';
+import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
+import { TenantGuard } from '../common/guards/tenant.guard';
 import { CurrentUser, AuthenticatedUser } from '../common/decorators/current-user.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
 import { Role } from '@prisma/client';
+import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { Request } from 'express';
+import { UpdateCompanyDto } from './dto/update-company.dto';
 
+@ApiTags('companies')
+@ApiBearerAuth()
 @Controller('companies')
+@UseGuards(JwtAuthGuard, TenantGuard)
 export class CompaniesController {
-  constructor(private readonly companies: CompaniesService) {}
+  constructor(private readonly service: CompaniesService) {}
 
-  /** GET /api/v1/companies/me — current tenant profile */
   @Get('me')
-  getMine(@CurrentUser() user: AuthenticatedUser) {
-    return this.companies.getMine(user.companyId);
+  me(@CurrentUser() u: AuthenticatedUser) {
+    return this.service.getMine(u.companyId);
   }
 
-  /** PATCH /api/v1/companies/me — owner/manager only */
+  @Get('me/export')
+  @Roles(Role.owner, Role.super_admin)
+  exportMe(@CurrentUser() u: AuthenticatedUser) {
+    return this.service.exportCompanyData(u.companyId);
+  }
+
   @Patch('me')
   @Roles(Role.owner, Role.manager, Role.super_admin)
-  updateMine(
-    @CurrentUser() user: AuthenticatedUser,
+  updateMe(
+    @CurrentUser() u: AuthenticatedUser,
     @Body() dto: UpdateCompanyDto,
     @Req() req: Request,
   ) {
-    return this.companies.updateMine(
-      user.companyId,
-      user.sub,
-      dto,
-      req.ip,
-    );
+    return this.service.updateMine(u.companyId, u.sub, dto, req.ip);
   }
 }

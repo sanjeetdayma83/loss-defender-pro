@@ -88,7 +88,7 @@ export class AuthService {
         phone: dto.phone ?? '',
         role: 'owner',
         passwordHash,
-        status: 'active',
+        status: 'pending',
       } as any,
     });
 
@@ -107,15 +107,11 @@ export class AuthService {
       console.error('[register] email send failed (non-fatal):', e?.message || e);
     }
 
-    const tokens = await this.tokensFor(user, undefined, ip);
     return {
-      ...tokens,
-      user: {
-        id: user.id, email: user.email, name: user.name,
-        role: user.role, companyId: company.id,
-      },
-      company: { id: company.id, companyName: company.companyName },
-      devVerifyCode: code,
+      message: 'Registered. Verify email to activate.',
+      email: user.email,
+      companyId: company.id,
+      requiresVerification: true,
     };
   }
 
@@ -162,6 +158,12 @@ export class AuthService {
       } as any,
     });
 
+    if (String((user as any).status) === 'pending') {
+      throw new UnauthorizedException('Email not verified');
+    }
+    if (String((user as any).status) !== 'active') {
+      throw new UnauthorizedException('Account not active');
+    }
     const tokens = await this.tokensFor(user as any, dto.deviceId, ip, ua);
     return {
       ...tokens,

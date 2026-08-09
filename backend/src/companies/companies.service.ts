@@ -1,4 +1,4 @@
-﻿import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { UpdateCompanyDto } from './dto/update-company.dto';
@@ -95,5 +95,47 @@ export class CompaniesService {
     });
 
     return updated;
+  }
+
+  async exportCompanyData(companyId: string) {
+    const [company, users, warehouses, orders, claims, recordings, evidence] =
+      await Promise.all([
+        this.prisma.company.findFirst({ where: { id: companyId } }),
+        this.prisma.user.findMany({
+          where: { companyId },
+          select: {
+            id: true, email: true, name: true, role: true, status: true,
+            phone: true, createdAt: true, lastLoginAt: true,
+          },
+        }),
+        this.prisma.warehouse.findMany({ where: { companyId } }),
+        this.prisma.order.findMany({
+          where: { companyId },
+          take: 500,
+          include: { items: true },
+          orderBy: { createdAt: 'desc' },
+        }),
+        this.prisma.claim.findMany({ where: { companyId }, take: 200 }),
+        this.prisma.recording.findMany({
+          where: { companyId },
+          take: 200,
+          select: {
+            id: true, orderId: true, status: true, durationSec: true,
+            segmentCount: true, totalBytes: true, createdAt: true,
+          },
+        }),
+        this.prisma.evidence.findMany({
+          where: { companyId },
+          take: 200,
+          select: {
+            id: true, recordingId: true, orderId: true, status: true,
+            frameCount: true, packKey: true, createdAt: true,
+          },
+        }),
+      ]);
+    return {
+      exportedAt: new Date().toISOString(),
+      company, users, warehouses, orders, claims, recordings, evidence,
+    };
   }
 }
