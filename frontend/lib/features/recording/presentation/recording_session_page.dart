@@ -164,12 +164,7 @@ class _RecordingSessionPageState extends State<RecordingSessionPage> {
   }
 
   Future<void> _queueAndUpload(String recordingId, XFile file, int sequence) async {
-    await RecordingUploadQueue.instance.enqueue(
-      recordingId: recordingId,
-      sequence: sequence,
-      file: file,
-      durationSec: 45,
-    );
+    await RecordingUploadQueue.instance.enqueue(recordingId: recordingId, sequence: sequence, file: file, durationSec: 45);
     await _drainQueue();
   }
 
@@ -188,35 +183,15 @@ class _RecordingSessionPageState extends State<RecordingSessionPage> {
       try {
         if (mounted) setState(() => _status = 'Uploading segment ${segment.sequence + 1}…');
         final bytes = await segment.readBytes();
-        final presign = await ApiClient.instance.dio.post(
-          '/recordings/${segment.recordingId}/segments/presign',
-          data: {'segmentIndex': segment.sequence, 'contentType': 'video/webm'},
-        );
+        final presign = await ApiClient.instance.dio.post('/recordings/${segment.recordingId}/segments/presign', data: {'segmentIndex': segment.sequence, 'contentType': 'video/webm'});
         final raw = presign.data;
         final data = raw is Map && raw['data'] != null ? raw['data'] : raw;
-        if (data is! Map || data['configured'] != true || data['uploadUrl'] == null || data['key'] == null) {
-          throw Exception('B2 upload is not configured');
-        }
+        if (data is! Map || data['configured'] != true || data['uploadUrl'] == null || data['key'] == null) throw Exception('B2 upload is not configured');
         final put = Dio();
-        await put.put(
-          data['uploadUrl'],
-          data: Stream.fromIterable([bytes]),
-          options: Options(
-            headers: {'Content-Type': 'video/webm', 'Content-Length': bytes.length},
-            contentType: 'video/webm',
-          ),
-        );
-        await ApiClient.instance.dio.post(
-          '/recordings/${segment.recordingId}/segments',
-          data: {
-            'sequence': segment.sequence,
-            'b2Key': data['key'],
-            'sizeBytes': bytes.length,
-            'durationSec': segment.durationSec,
-          },
-        );
+        await put.put(data['uploadUrl'], data: Stream.fromIterable([bytes]), options: Options(headers: {'Content-Type': 'video/webm', 'Content-Length': bytes.length}, contentType: 'video/webm'));
+        await ApiClient.instance.dio.post('/recordings/${segment.recordingId}/segments', data: {'sequence': segment.sequence, 'b2Key': data['key'], 'sizeBytes': bytes.length, 'durationSec': segment.durationSec});
         await queue.remove(segment);
-      } catch (e) {
+      } catch (_) {
         if (mounted) setState(() => _status = 'Offline/upload pending — will retry automatically');
         break;
       }
@@ -227,14 +202,12 @@ class _RecordingSessionPageState extends State<RecordingSessionPage> {
       final recordingId = finalization['recordingId']?.toString();
       final durationSec = int.tryParse(finalization['durationSec']?.toString() ?? '') ?? 0;
       if (recordingId == null) continue;
-      final remaining = (await queue.pending()).where((s) => s.recordingId == recordingId).isNotEmpty;
+      final remaining = (await queue.pending()).any((s) => s.recordingId == recordingId);
       if (remaining) continue;
       try {
         await ApiClient.instance.dio.post('/recordings/$recordingId/stop', data: {'durationSec': durationSec});
         await queue.removeFinalize(recordingId);
-        if (_recordingId == recordingId && mounted) {
-          setState(() => _status = 'Uploaded — evidence processing started');
-        }
+        if (_recordingId == recordingId && mounted) setState(() => _status = 'Uploaded — evidence processing started');
       } catch (_) {
         if (mounted) setState(() => _status = 'Evidence finalization pending — will retry automatically');
       }
@@ -261,12 +234,7 @@ class _RecordingSessionPageState extends State<RecordingSessionPage> {
       final stillPending = (await RecordingUploadQueue.instance.pending()).any((s) => s.recordingId == recordingId);
       final finalizationPending = (await RecordingUploadQueue.instance.pendingFinalizations()).any((x) => x['recordingId'] == recordingId);
       if (stillPending || finalizationPending) {
-        if (mounted) {
-          setState(() {
-            _status = 'Saved locally. Upload will resume automatically when connection returns.';
-            _recording = false;
-          });
-        }
+        if (mounted) setState(() { _status = 'Saved locally. Upload will resume automatically when connection returns.'; _recording = false; });
         return;
       }
       if (!mounted) return;
@@ -294,55 +262,16 @@ class _RecordingSessionPageState extends State<RecordingSessionPage> {
   Widget build(BuildContext context) => Scaffold(
     backgroundColor: Colors.black,
     appBar: AppBar(backgroundColor: Colors.black, foregroundColor: Colors.white, title: const Text('Recording Session')),
-    body: Column(
-      children: [
-        Expanded(
-          child: !_camReady
-              ? Center(child: Text(_error ?? 'Starting camera…', style: const TextStyle(color: Colors.white70)))
-              : Stack(
-                  fit: StackFit.expand,
-                  children: [
-                    CameraPreview(_cam!),
-                    if (_recording)
-                      Positioned(
-                        top: 16,
-                        left: 16,
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                          decoration: BoxDecoration(color: Colors.red.shade700, borderRadius: BorderRadius.circular(8)),
-                          child: Row(children: [
-                            const Icon(Icons.fiber_manual_record, color: Colors.white, size: 14),
-                            const SizedBox(width: 6),
-                            Text(_fmt(_elapsed), style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
-                          ]),
-                        ),
-                      ),
-                    if (_status != null)
-                      Positioned(bottom: 48, left: 16, right: 16, child: Text(_status!, textAlign: TextAlign.center, style: const TextStyle(color: Colors.lightGreenAccent))),
-                    if (_error != null)
-                      Positioned(bottom: 16, left: 16, right: 16, child: Text(_error!, textAlign: TextAlign.center, style: const TextStyle(color: Colors.orangeAccent))),
-                  ],
-                ),
-        ),
-        Container(
-          color: Colors.black,
-          padding: const EdgeInsets.fromLTRB(24, 16, 24, 32),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              GestureDetector(
-                onTap: _busy ? null : _toggle,
-                child: Container(
-                  width: 72,
-                  height: 72,
-                  decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: Colors.white, width: 4), color: _recording ? AppColors.danger : Colors.white24),
-                  child: Icon(_recording ? Icons.stop : Icons.fiber_manual_record, color: Colors.white, size: 36),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ],
-    ),
+    body: Column(children: [
+      Expanded(child: !_camReady
+          ? Center(child: Text(_error ?? 'Starting camera…', style: const TextStyle(color: Colors.white70)))
+          : Stack(fit: StackFit.expand, children: [
+              CameraPreview(_cam!),
+              if (_recording) Positioned(top: 16, left: 16, child: Container(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6), decoration: BoxDecoration(color: Colors.red.shade700, borderRadius: BorderRadius.circular(8)), child: Row(children: [const Icon(Icons.fiber_manual_record, color: Colors.white, size: 14), const SizedBox(width: 6), Text(_fmt(_elapsed), style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700))]))),
+              if (_status != null) Positioned(bottom: 48, left: 16, right: 16, child: Text(_status!, textAlign: TextAlign.center, style: const TextStyle(color: Colors.lightGreenAccent))),
+              if (_error != null) Positioned(bottom: 16, left: 16, right: 16, child: Text(_error!, textAlign: TextAlign.center, style: const TextStyle(color: Colors.orangeAccent))),
+            ])),
+      Container(color: Colors.black, padding: const EdgeInsets.fromLTRB(24, 16, 24, 32), child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [GestureDetector(onTap: _busy ? null : _toggle, child: Container(width: 72, height: 72, decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: Colors.white, width: 4), color: _recording ? AppColors.danger : Colors.white24), child: Icon(_recording ? Icons.stop : Icons.fiber_manual_record, color: Colors.white, size: 36)))])),
+    ]),
   );
 }
