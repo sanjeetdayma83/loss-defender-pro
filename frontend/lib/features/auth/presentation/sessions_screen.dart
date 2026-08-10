@@ -55,7 +55,7 @@ class _SessionsScreenState extends State<SessionsScreen> {
               ? Center(child: Text(_error!))
               : ListView.separated(
                   itemCount: _list.length,
-                  separatorBuilder: (_, __) => const Divider(height: 1),
+                  separatorBuilder: (_, _) => const Divider(height: 1),
                   itemBuilder: (_, i) {
                     final s = _list[i] as Map;
                     return ListTile(

@@ -19,6 +19,11 @@ export class EvidenceController {
     return this.evidence.list(u.companyId);
   }
 
+  @Get(':id/download-url')
+  downloadUrl(@CurrentUser() u: AuthenticatedUser, @Param('id') id: string) {
+    return this.evidence.getDownloadUrl(u.companyId, id);
+  }
+
   @Get(':id')
   getOne(@CurrentUser() u: AuthenticatedUser, @Param('id') id: string) {
     return this.evidence.getOne(u.companyId, id);

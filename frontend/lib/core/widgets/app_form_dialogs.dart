@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import '../theme/app_theme.dart';
 
 /// Form-style modals (Add Warehouse, Change Password, Filter, Export, etc.)
 class AppFormDialogs {
@@ -91,7 +90,9 @@ class AppFormDialogs {
                     FilledButton(
                       onPressed: () {
                         if (nameCtrl.text.trim().isEmpty ||
-                            codeCtrl.text.trim().isEmpty) return;
+                            codeCtrl.text.trim().isEmpty) {
+                          return;
+                        }
                         Navigator.pop(ctx, {
                           'name': nameCtrl.text.trim(),
                           'code': codeCtrl.text.trim().toUpperCase(),

@@ -68,7 +68,7 @@ class _ClaimsScreenState extends State<ClaimsScreen> {
                 const SizedBox(height: 12),
                 if (_orders.isNotEmpty)
                   DropdownButtonFormField<String>(
-                    value: orderId,
+                    initialValue: orderId,
                     decoration: const InputDecoration(labelText: 'Order (optional)'),
                     items: [
                       const DropdownMenuItem(value: null, child: Text('— None —')),
@@ -98,7 +98,7 @@ class _ClaimsScreenState extends State<ClaimsScreen> {
       await ApiClient.instance.dio.post('/claims', data: {
         'title': titleCtrl.text.trim(),
         if (reasonCtrl.text.trim().isNotEmpty) 'reason': reasonCtrl.text.trim(),
-        if (orderId != null) 'orderId': orderId,
+        'orderId': ?orderId,
       });
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Claim created')));
@@ -155,7 +155,7 @@ class _ClaimsScreenState extends State<ClaimsScreen> {
                       : ListView.separated(
                           padding: EdgeInsets.all(isWide ? 24 : 16),
                           itemCount: _list.length,
-                          separatorBuilder: (_, __) => const SizedBox(height: 8),
+                          separatorBuilder: (_, _) => const SizedBox(height: 8),
                           itemBuilder: (context, i) {
                             final c = _list[i] as Map<String, dynamic>;
                             final status = c['status']?.toString() ?? 'open';

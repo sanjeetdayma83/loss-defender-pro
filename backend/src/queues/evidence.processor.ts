@@ -1,12 +1,10 @@
-﻿import { Processor, WorkerHost } from '@nestjs/bullmq';
+import { Processor, WorkerHost } from '@nestjs/bullmq';
 import { Logger } from '@nestjs/common';
 import { Job } from 'bullmq';
-
+import { EvidenceService } from '../evidence/evidence.service';
 @Processor('evidence')
 export class EvidenceProcessor extends WorkerHost {
   private readonly logger = new Logger(EvidenceProcessor.name);
-
-  async process(job: Job) {
-    this.logger.log(`evidence job ${job.id} ${JSON.stringify(job.data)}`);
-  }
+  constructor(private readonly evidence: EvidenceService) { super(); }
+  async process(job: Job<{ companyId: string; recordingId: string; evidenceId: string }>) { this.logger.log(`processing evidence job ${job.id}`); return this.evidence.processRecordingEvidence(job.data.companyId, job.data.recordingId, job.data.evidenceId); }
 }

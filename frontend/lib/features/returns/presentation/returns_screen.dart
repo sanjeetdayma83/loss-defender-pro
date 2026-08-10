@@ -68,7 +68,7 @@ class _ReturnsScreenState extends State<ReturnsScreen> {
               mainAxisSize: MainAxisSize.min,
               children: [
                 DropdownButtonFormField<String>(
-                  value: orderId,
+                  initialValue: orderId,
                   decoration: const InputDecoration(labelText: 'Order *'),
                   items: _orders.map((o) {
                     final m = o as Map;
@@ -153,7 +153,7 @@ class _ReturnsScreenState extends State<ReturnsScreen> {
                       : ListView.separated(
                           padding: EdgeInsets.all(isWide ? 24 : 16),
                           itemCount: _list.length,
-                          separatorBuilder: (_, __) => const SizedBox(height: 8),
+                          separatorBuilder: (_, _) => const SizedBox(height: 8),
                           itemBuilder: (context, i) {
                             final r = _list[i] as Map<String, dynamic>;
                             final status = r['status']?.toString() ?? 'open';
