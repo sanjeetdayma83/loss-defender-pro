@@ -1,3 +1,6 @@
+import { RbacModule } from './common/rbac/rbac.module';
+import { BillingModule } from './billing/billing.module';
+import { AnalyticsModule } from './analytics/analytics.module';
 import { RequestIdMiddleware } from './common/middleware/request-id.middleware';
 import { MiddlewareConsumer, NestModule, Module } from '@nestjs/common';
 
@@ -47,7 +50,7 @@ import { RealtimeModule } from './realtime/realtime.module';
     ReturnsModule,
     ScannerModule,
     AlertsModule,
-    MarketplaceModule,
+    MarketplaceModule, AnalyticsModule, BillingModule,
     NotificationsModule,
   ],
   

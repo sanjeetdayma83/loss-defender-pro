@@ -1,8 +1,4 @@
-import {
-  Injectable,
-  NotFoundException,
-  BadRequestException,
-} from '@nestjs/common';
+﻿import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 
 const ALLOWED: Record<string, string[]> = {
@@ -27,9 +23,7 @@ export class ClaimsService {
   }
 
   async getOne(companyId: string, id: string) {
-    const row = await this.prisma.claim.findFirst({
-      where: { id, companyId },
-    });
+    const row = await this.prisma.claim.findFirst({ where: { id, companyId } });
     if (!row) throw new NotFoundException('Claim not found');
     return row;
   }
@@ -37,29 +31,20 @@ export class ClaimsService {
   async create(
     companyId: string,
     actorId: string,
-    data: {
-      orderId: string;
-      reason: string;
-      marketplace?: string;
-      description?: string;
-      evidenceIds?: string[];
-    },
+    data: { orderId: string; reason?: string; description?: string; marketplace?: string },
   ) {
-    const order = await this.prisma.order.findFirst({
-      where: { id: data.orderId, companyId },
-    });
+    const order = await this.prisma.order.findFirst({ where: { id: data.orderId, companyId } });
     if (!order) throw new NotFoundException('Order not found');
 
     const claim = await this.prisma.claim.create({
       data: {
         companyId,
         orderId: data.orderId,
-        reason: data.reason,
-        marketplace: data.marketplace ?? (order as any).marketplace ?? null,
+        reason: data.reason ?? 'unspecified',
         description: data.description,
-        evidenceIds: data.evidenceIds ?? [],
-        status: 'open' as any,
-      },
+        marketplace: data.marketplace,
+        status: 'open',
+      } as any,
     });
 
     await this.writeAudit(companyId, actorId, 'claim.create', 'Claim', claim.id, {
@@ -77,9 +62,7 @@ export class ClaimsService {
     status: string,
     decisionNote?: string,
   ) {
-    const row = await this.prisma.claim.findFirst({
-      where: { id, companyId },
-    });
+    const row = await this.prisma.claim.findFirst({ where: { id, companyId } });
     if (!row) throw new NotFoundException('Claim not found');
 
     const cur = (row.status as string) || 'open';
@@ -92,41 +75,41 @@ export class ClaimsService {
 
     const data: any = { status };
     if (decisionNote) data.decisionNote = decisionNote;
-    if (status === 'closed' || status === 'approved' || status === 'rejected') {
+    if (['closed', 'approved', 'rejected'].includes(status)) {
       data.closedAt = new Date();
     }
 
-    const updated = await this.prisma.claim.update({
-      where: { id },
-      data,
-    });
+    const updated = await this.prisma.claim.update({ where: { id }, data });
 
     await this.writeAudit(companyId, actorId, 'claim.status', 'Claim', id, {
       from: cur,
       to: status,
     });
+
     return updated;
   }
 
   private async writeAudit(
     companyId: string,
-    actorId: string,
+    actorId: string | null,
     action: string,
     entity: string,
     entityId: string,
-    meta?: any,
+    after?: any,
   ) {
     try {
       await this.prisma.auditLog.create({
         data: {
           companyId,
-          actorId,
+          actorId: actorId || null,
           action,
           entity,
           entityId,
-          meta: meta ?? {},
-        } as any,
+          after: after ?? null,
+        },
       });
-    } catch (_) {}
+    } catch (e: any) {
+      console.warn('audit write failed', e?.message);
+    }
   }
 }

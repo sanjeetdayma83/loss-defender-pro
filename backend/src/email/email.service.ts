@@ -6,7 +6,7 @@ export class EmailService {
 
   async send(to: string, subject: string, text: string, html?: string) {
     const host = process.env.SMTP_HOST;
-    if (!host) {
+    if (!host || host.includes('PLACE_YOUR')) {
       this.log.warn(`[DEV MAIL] to=${to} | ${subject}\n${text}`);
       return { mock: true, to, subject };
     }
@@ -37,30 +37,30 @@ export class EmailService {
     }
   }
 
-  sendVerifyEmailOtp(to: string, code: string) {
-    return this.send(
-      to,
-      'Verify your Loss Defender Pro email',
-      `Your verification code is ${code}. Valid for 15 minutes.`,
-    );
-  }
-
   sendPasswordResetOtp(to: string, code: string) {
-    return this.send(
-      to,
-      'Password reset code',
-      `Your password reset code is ${code}. Valid for 15 minutes.`,
-    );
+    const subject = 'Password Reset Code — Loss Defender Pro';
+    const text = `Your password reset code is: ${code}\n\nExpires in 15 minutes.`;
+    const html = `<div style="font-family:Arial,sans-serif"><h2>Password Reset</h2><p>Code: <b style="font-size:24px">${code}</b></p><p>Expires in 15 minutes.</p></div>`;
+    return this.send(to, subject, text, html);
   }
 
-  sendInvite(to: string, acceptUrl: string, companyName?: string) {
-    return this.send(
-      to,
-      'You are invited to Loss Defender Pro',
-      `You have been invited${companyName ? ` to ${companyName}` : ''}.\n\nAccept your invite:\n${acceptUrl}\n\nThis link expires in 7 days.`,
-      `<p>You have been invited${companyName ? ` to <b>${companyName}</b>` : ''}.</p>
-       <p><a href="${acceptUrl}">Accept invite</a></p>
-       <p>Link expires in 7 days.</p>`,
-    );
+  sendVerifyEmailOtp(to: string, code: string) {
+    const subject = 'Verify your email — Loss Defender Pro';
+    const text = `Your verification code is: ${code}`;
+    const html = `<div style="font-family:Arial,sans-serif"><h2>Email Verification</h2><p>Code: <b style="font-size:24px">${code}</b></p></div>`;
+    return this.send(to, subject, text, html);
+  }
+
+  sendInvite(to: string, acceptUrl: string) {
+    const subject = 'You are invited — Loss Defender Pro';
+    const text = `You have been invited to Loss Defender Pro.\n\nAccept: ${acceptUrl}\n\nIf you did not expect this, ignore this email.`;
+    const html = `
+      <div style="font-family:Arial,sans-serif;max-width:480px">
+        <h2>You're invited</h2>
+        <p>You have been invited to join Loss Defender Pro.</p>
+        <p><a href="${acceptUrl}" style="display:inline-block;padding:12px 20px;background:#2563eb;color:#fff;text-decoration:none;border-radius:6px">Accept invite</a></p>
+        <p style="color:#666;font-size:13px">Or open: ${acceptUrl}</p>
+      </div>`;
+    return this.send(to, subject, text, html);
   }
 }

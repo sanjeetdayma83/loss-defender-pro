@@ -403,4 +403,18 @@ export class AuthService {
     ]);
     return { ok: true };
   }
+  async revokeAllSessions(userId: string) {
+    try {
+      await this.prisma.refreshSession.updateMany({
+        where: { userId, revokedAt: null },
+        data: { revokedAt: new Date() },
+      });
+    } catch (_) {
+      await this.prisma.session.updateMany({
+        where: { userId },
+        data: { revokedAt: new Date() } as any,
+      }).catch(() => null);
+    }
+    return { revoked: true };
+  }
 }

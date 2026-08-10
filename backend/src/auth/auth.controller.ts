@@ -1,7 +1,9 @@
-﻿import {
+import { GoogleOAuthService } from './oauth/google-oauth.service';
+import {
   Controller, Post, Get, Delete, Body, Param, Req,
 } from '@nestjs/common';
 import { AuthService } from './auth.service';
+import { OtpService } from './otp.service';
 import {
   RegisterDto, LoginDto, ForgotPasswordDto, ResetPasswordDto,
   VerifyEmailDto, RefreshDto, LogoutDto,
@@ -17,7 +19,7 @@ import { Throttle } from '@nestjs/throttler';
 @ApiTags('auth')
 @Controller('auth')
 export class AuthController {
-  constructor(private readonly auth: AuthService) {}
+  constructor(private readonly auth: AuthService, private readonly otp: OtpService, private readonly google: GoogleOAuthService) {}
 
   @Public()
   @Throttle({ default: { limit: 5, ttl: 60000 } })
@@ -90,5 +92,27 @@ export class AuthController {
   @ApiBearerAuth()
   revoke(@CurrentUser() user: AuthenticatedUser, @Param('id') id: string) {
     return this.auth.revokeSession(user.sub, id);
+  }
+  @Post('logout-all')
+  logoutAll(@CurrentUser() user: AuthenticatedUser) {
+    return this.auth.revokeAllSessions(user.sub);
+  }
+
+  @Public()
+  @Post('otp/request')
+  otpRequest(@Body() body: { email: string; purpose?: string }) {
+    return this.otp.request(body.email, body.purpose || 'sensitive');
+  }
+
+  @Public()
+  @Post('otp/verify')
+  otpVerify(@Body() body: { email: string; purpose?: string; code: string }) {
+    return this.otp.verify(body.email, body.purpose || 'sensitive', body.code);
+  }
+
+  @Public()
+  @Get('google/start')
+  googleStart() {
+    return this.google.getStartUrl();
   }
 }

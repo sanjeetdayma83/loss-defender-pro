@@ -4,6 +4,7 @@ import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { AppModule } from './app.module';
 import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
 import { TransformInterceptor } from './common/interceptors/transform.interceptor';
+import { SanitizeInterceptor } from './common/interceptors/sanitize.interceptor';
 import { validateEnv } from './config/validate-env';
 
 // Prisma BigInt → JSON (once only)
@@ -63,7 +64,7 @@ async function bootstrap() {
 
   app.useGlobalInterceptors(
     new LoggingInterceptor(),
-    new TransformInterceptor(),
+    new SanitizeInterceptor(), new TransformInterceptor(),
   );
 
   const port = process.env.PORT ? Number(process.env.PORT) : 3000;

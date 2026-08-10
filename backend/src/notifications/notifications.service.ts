@@ -3,7 +3,7 @@ import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateNotificationDto } from './dto/create-notification.dto';
-import { QUEUE_EMAIL, QUEUE_NOTIFICATION } from '../queues/queues.module';
+import { QUEUE_EMAIL, QUEUE_NOTIFICATION } from '../queues/queue.constants';
 import { NotificationChannel, NotificationStatus } from '@prisma/client';
 import { EventsGateway } from '../realtime/events.gateway';
 

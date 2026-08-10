@@ -13,7 +13,7 @@ export interface AuditLogPayload {
   userAgent?: string | null;
   before?: any;
   after?: any;
-  [key: string]: any; // allow any extra fields
+  [key: string]: any;
 }
 
 @Injectable()
@@ -22,15 +22,8 @@ export class AuditService {
 
   constructor(private readonly prisma: PrismaService) {}
 
-  /** Used by existing services & interceptor */
   async log(payload: AuditLogPayload) {
     try {
-      const meta = {
-        ...(payload.meta || {}),
-        ...(payload.before !== undefined ? { before: payload.before } : {}),
-        ...(payload.after !== undefined ? { after: payload.after } : {}),
-      };
-
       await this.prisma.auditLog.create({
         data: {
           companyId: payload.companyId,
@@ -38,18 +31,16 @@ export class AuditService {
           action: payload.action,
           entity: payload.entity,
           entityId: payload.entityId ?? null,
-          meta,
-          // if your schema has these columns, uncomment:
-          // ipAddress: payload.ipAddress || payload.ip || null,
-          // userAgent: payload.userAgent || null,
-        } as any,
+          before: payload.before ?? null,
+          after: payload.after ?? payload.meta ?? null,
+          ipAddress: payload.ipAddress || payload.ip || null,
+        },
       });
     } catch (e: any) {
       this.logger.warn(`Audit log failed: ${e?.message}`);
     }
   }
 
-  /** Used by AuditController */
   list(companyId: string, take = 50) {
     return this.prisma.auditLog.findMany({
       where: { companyId },

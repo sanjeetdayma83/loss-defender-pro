@@ -1,39 +1,65 @@
-import 'dart:convert';
+﻿import 'dart:convert';
+import 'package:dio/dio.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import '../network/api_client.dart';
 
-/// In-memory + SharedPreferences-backed offline queue (SQLite optional next).
 class OfflineQueue {
-  OfflineQueue._();
-  static final OfflineQueue instance = OfflineQueue._();
+  static const _key = 'ldp_offline_queue';
 
-  final List<Map<String, dynamic>> _q = [];
+  static Future<List<Map<String, dynamic>>> _read() async {
+    final p = await SharedPreferences.getInstance();
+    final raw = p.getString(_key);
+    if (raw == null || raw.isEmpty) return [];
+    return (jsonDecode(raw) as List)
+        .map((e) => Map<String, dynamic>.from(e as Map))
+        .toList();
+  }
 
-  Future<void> enqueue({
-    required String method,
-    required String path,
-    Map<String, dynamic>? body,
-  }) async {
-    _q.add({
+  static Future<void> _write(List<Map<String, dynamic>> items) async {
+    final p = await SharedPreferences.getInstance();
+    await p.setString(_key, jsonEncode(items));
+  }
+
+  static Future<void> enqueue(String method, String path, Map<String, dynamic>? body) async {
+    final items = await _read();
+    items.add({
       'id': DateTime.now().millisecondsSinceEpoch.toString(),
       'method': method,
       'path': path,
       'body': body,
       'createdAt': DateTime.now().toIso8601String(),
     });
+    await _write(items);
   }
 
-  List<Map<String, dynamic>> peek() => List.unmodifiable(_q);
-
-  Future<void> flush(Future<void> Function(Map<String, dynamic> item) send) async {
-    final copy = List<Map<String, dynamic>>.from(_q);
-    for (final item in copy) {
+  static Future<int> flush() async {
+    final items = await _read();
+    if (items.isEmpty) return 0;
+    final remaining = <Map<String, dynamic>>[];
+    var ok = 0;
+    for (final item in items) {
       try {
-        await send(item);
-        _q.remove(item);
+        final method = (item['method'] as String).toUpperCase();
+        final path = item['path'] as String;
+        final body = item['body'] as Map<String, dynamic>?;
+        final dio = ApiClient.instance.dio;
+        if (method == 'POST') {
+          await dio.post(path, data: body);
+        } else if (method == 'PATCH') {
+          await dio.patch(path, data: body);
+        } else if (method == 'PUT') {
+          await dio.put(path, data: body);
+        } else {
+          await dio.request(path, data: body, options: Options(method: method));
+        }
+        ok++;
       } catch (_) {
-        break; // stop on first failure
+        remaining.add(item);
       }
     }
+    await _write(remaining);
+    return ok;
   }
 
-  String debugJson() => jsonEncode(_q);
+  static Future<int> pendingCount() async => (await _read()).length;
 }

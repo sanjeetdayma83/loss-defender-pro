@@ -4,11 +4,19 @@ import { EmailModule } from '../email/email.module';
 import { EmailProcessor } from './email.processor';
 import { EvidenceProcessor } from './evidence.processor';
 import { NotificationProcessor } from './notification.processor';
+import {
+  QUEUE_EMAIL,
+  QUEUE_EVIDENCE,
+  QUEUE_NOTIFICATION,
+} from './queue.constants';
 
-export const QUEUE_EMAIL = 'email';
-export const QUEUE_EVIDENCE = 'evidence';
-export const QUEUE_NOTIFY = 'notify';
-export const QUEUE_NOTIFICATION = 'notify';
+// re-export so old imports still work
+export {
+  QUEUE_EMAIL,
+  QUEUE_EVIDENCE,
+  QUEUE_NOTIFY,
+  QUEUE_NOTIFICATION,
+} from './queue.constants';
 
 @Module({
   imports: [
@@ -20,9 +28,9 @@ export const QUEUE_NOTIFICATION = 'notify';
       },
     }),
     BullModule.registerQueue(
-      { name: 'email' },
-      { name: 'evidence' },
-      { name: 'notify' },
+      { name: QUEUE_EMAIL },
+      { name: QUEUE_EVIDENCE },
+      { name: QUEUE_NOTIFICATION },
     ),
   ],
   providers: [EmailProcessor, EvidenceProcessor, NotificationProcessor],

@@ -1,8 +1,11 @@
-﻿import { Module } from '@nestjs/common';
+import { RbacController } from '../common/rbac/rbac.controller';
+import { GoogleOAuthService } from './oauth/google-oauth.service';
+import { Module } from '@nestjs/common';
 import { JwtModule } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
 import { APP_GUARD } from '@nestjs/core';
 import { AuthService } from './auth.service';
+import { OtpService } from './otp.service';
 import { AuthController } from './auth.controller';
 import { JwtStrategy } from './strategies/jwt.strategy';
 import { JwtRefreshStrategy } from './strategies/jwt-refresh.strategy';
@@ -13,8 +16,8 @@ import { EmailModule } from '../email/email.module';
 
 @Module({
   imports: [PassportModule, JwtModule.register({}), EmailModule],
-  controllers: [AuthController],
-  providers: [
+  controllers: [RbacController, AuthController],
+  providers: [GoogleOAuthService, OtpService, 
     AuthService,
     JwtStrategy,
     JwtRefreshStrategy,
