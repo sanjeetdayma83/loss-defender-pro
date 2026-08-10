@@ -1,153 +1,16 @@
-﻿import {
-  Injectable,
-  NotFoundException,
-  BadRequestException,
-  UnauthorizedException,
-} from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, UnauthorizedException, ServiceUnavailableException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-
+import { MarketplaceCryptoService } from './marketplace-crypto.service';
+import { createHmac, timingSafeEqual } from 'crypto';
 @Injectable()
 export class MarketplaceService {
-  constructor(private readonly prisma: PrismaService) {}
-
-  list(companyId: string) {
-    return this.prisma.marketplaceConnection
-      .findMany({
-        where: { companyId },
-        orderBy: { createdAt: 'desc' },
-        select: {
-          id: true,
-          provider: true,
-          storeName: true,
-          externalId: true,
-          status: true,
-          lastSyncAt: true,
-          createdAt: true,
-          updatedAt: true,
-        },
-      })
-      .catch(() => []);
-  }
-
-  async connect(companyId: string, dto: any) {
-    if (!dto?.provider) throw new BadRequestException('provider required');
-
-    const provider = String(dto.provider);
-
-    try {
-      const existing = await this.prisma.marketplaceConnection.findFirst({
-        where: {
-          companyId,
-          provider: provider as any,
-          storeName: dto.storeName ?? null,
-        },
-      });
-
-      if (existing) {
-        return this.prisma.marketplaceConnection.update({
-          where: { id: existing.id },
-          data: {
-            accessToken: dto.accessToken ?? dto.credentials?.accessToken,
-            refreshToken: dto.refreshToken ?? dto.credentials?.refreshToken,
-            webhookSecret: dto.webhookSecret,
-            externalId: dto.externalId ?? dto.externalAccountId,
-            status: 'connected' as any,
-            lastSyncAt: new Date(),
-          },
-        });
-      }
-
-      return await this.prisma.marketplaceConnection.create({
-        data: {
-          companyId,
-          provider: provider as any,
-          storeName: dto.storeName,
-          externalId: dto.externalId ?? dto.externalAccountId,
-          accessToken: dto.accessToken ?? dto.credentials?.accessToken,
-          refreshToken: dto.refreshToken ?? dto.credentials?.refreshToken,
-          webhookSecret: dto.webhookSecret,
-          status: 'connected' as any,
-          lastSyncAt: new Date(),
-        } as any,
-      });
-    } catch (e: any) {
-      // Model / enum mismatch — return stub so API stays green
-      return {
-        companyId,
-        provider,
-        status: 'connected',
-        note: `Stub connect: ${e?.message || e}`,
-      };
-    }
-  }
-
-  async disconnect(companyId: string, id: string) {
-    const row = await this.prisma.marketplaceConnection.findFirst({
-      where: { id, companyId },
-    });
-    if (!row) throw new NotFoundException('Connection not found');
-    try {
-      return await this.prisma.marketplaceConnection.update({
-        where: { id },
-        data: {
-          status: 'disconnected' as any,
-          accessToken: null,
-          refreshToken: null,
-        },
-      });
-    } catch {
-      return { id, status: 'disconnected' };
-    }
-  }
-
-  async syncOrders(companyId: string, provider = 'amazon') {
-    return {
-      provider,
-      companyId,
-      imported: 0,
-      message: `Sync job queued for ${provider} (stub — wire SP-API/Flipkart keys next)`,
-      status: 'queued',
-    };
-  }
-
-  async handleWebhook(
-    provider: string,
-    body: any,
-    secretHeader?: string,
-  ) {
-    const envKey = `WEBHOOK_SECRET_${String(provider).toUpperCase()}`;
-    const secret =
-      process.env[envKey] || process.env.WEBHOOK_SECRET || '';
-
-    // Optional HMAC / shared-secret check
-    if (secret && secretHeader && secretHeader !== secret) {
-      // Also accept sha256= hex if client sends signature
-      const crypto = await import('crypto');
-      const expected = crypto
-        .createHmac('sha256', secret)
-        .update(JSON.stringify(body ?? {}))
-        .digest('hex');
-      if (
-        secretHeader !== expected &&
-        secretHeader !== `sha256=${expected}`
-      ) {
-        throw new UnauthorizedException('Invalid webhook signature');
-      }
-    }
-
-    // Best-effort: if connection exists, touch lastSyncAt
-    try {
-      await this.prisma.marketplaceConnection.updateMany({
-        where: { provider: provider as any },
-        data: { lastSyncAt: new Date() },
-      });
-    } catch (_) {}
-
-    return {
-      received: true,
-      provider,
-      event: body?.event || body?.type || 'unknown',
-      id: body?.id ?? null,
-    };
-  }
+  constructor(private readonly prisma: PrismaService, private readonly crypto: MarketplaceCryptoService) {}
+  private safe(row:any){return {id:row.id,companyId:row.companyId,provider:row.provider,storeName:row.storeName,externalId:row.externalId,status:row.status,lastSyncAt:row.lastSyncAt,createdAt:row.createdAt,updatedAt:row.updatedAt};}
+  list(companyId:string){return this.prisma.marketplaceConnection.findMany({where:{companyId},orderBy:{createdAt:'desc'},select:{id:true,provider:true,storeName:true,externalId:true,status:true,lastSyncAt:true,createdAt:true,updatedAt:true}});}
+  async connect(companyId:string,dto:any){const provider=String(dto?.provider||'').toLowerCase();if(!provider)throw new BadRequestException('provider required');const access=dto.accessToken??dto.credentials?.accessToken;const refresh=dto.refreshToken??dto.credentials?.refreshToken;if(!access&&!refresh)throw new BadRequestException('Marketplace access credentials are required');const data:any={accessToken:this.crypto.encrypt(access),refreshToken:this.crypto.encrypt(refresh),webhookSecret:this.crypto.encrypt(dto.webhookSecret),externalId:dto.externalId??dto.externalAccountId,status:'connected',lastSyncAt:null};const existing=await this.prisma.marketplaceConnection.findFirst({where:{companyId,provider:provider as any,storeName:dto.storeName??null}});const row=existing?await this.prisma.marketplaceConnection.update({where:{id:existing.id},data}):await this.prisma.marketplaceConnection.create({data:{companyId,provider:provider as any,storeName:dto.storeName,...data} as any});return this.safe(row);}
+  async disconnect(companyId:string,id:string){const row=await this.prisma.marketplaceConnection.findFirst({where:{id,companyId}});if(!row)throw new NotFoundException('Connection not found');const out=await this.prisma.marketplaceConnection.update({where:{id},data:{status:'disconnected',accessToken:null,refreshToken:null,webhookSecret:null}});return this.safe(out);}
+  async syncOrders(companyId:string,provider='amazon'){const p=String(provider).toLowerCase();const c=await this.prisma.marketplaceConnection.findFirst({where:{companyId,provider:p as any,status:'connected'}});if(!c)throw new NotFoundException(`No connected ${p} marketplace account`);const token=this.crypto.decrypt(c.accessToken);if(!token)throw new BadRequestException('Marketplace access token is missing; reconnect the account');if(p==='flipkart')return this.syncFlipkart(companyId,c.id,token);throw new ServiceUnavailableException(`${p} live connector is not configured. Refusing to return a fabricated sync success.`);}
+  private async syncFlipkart(companyId:string,connectionId:string,token:string){const r=await fetch('https://api.flipkart.net/sellers/v2/orders/search',{method:'POST',headers:{Authorization:`Bearer ${token}`,'Content-Type':'application/json'},body:JSON.stringify({filter:{},sort:{field:'orderDate',order:'desc'},pageSize:20})});if(!r.ok)throw new BadRequestException(`Flipkart order sync failed (${r.status})`);const b:any=await r.json();const items:any[]=b?.orderItems||b?.orderitems||b?.orders||[];let imported=0;for(const i of items){const oid=String(i.orderId??i.orderID??i.orderItemId??'');if(!oid)continue;let order=await this.prisma.order.findFirst({where:{companyId,marketplace:'flipkart',marketplaceOrderId:oid}});if(order)order=await this.prisma.order.update({where:{id:order.id},data:{status:this.mapStatus(i.status??i.state),metadata:i} as any});else{order=await this.prisma.order.create({data:{companyId,marketplace:'flipkart',marketplaceOrderId:oid,status:this.mapStatus(i.status??i.state),customerName:i.customerName??i.buyerName,shippingAddress:i.shippingAddress??undefined,awb:i.trackingId??i.awb,courier:i.courierName??undefined,metadata:i} as any});imported++;}const sku=String(i.sku??i.skuId??i.listingId??oid);const qty=Number(i.quantity??1)||1;const old=await this.prisma.orderItem.findFirst({where:{orderId:order.id,sku}});if(old)await this.prisma.orderItem.update({where:{id:old.id},data:{name:i.title??sku,qty,barcode:i.barcode??null,metadata:i}});else await this.prisma.orderItem.create({data:{orderId:order.id,sku,name:i.title??sku,qty,barcode:i.barcode??null,metadata:i}});}await this.prisma.marketplaceConnection.update({where:{id:connectionId},data:{lastSyncAt:new Date(),status:'connected'}});return {provider:'flipkart',companyId,imported,received:items.length,status:'completed'};}
+  private mapStatus(s:any):any{const x=String(s??'').toLowerCase();if(x.includes('cancel'))return'closed';if(x.includes('deliver'))return'closed';if(x.includes('ship'))return'shipped';if(x.includes('pack'))return'packing';return'synced';}
+  async handleWebhook(provider:string,body:any,header?:string){if(!header)throw new UnauthorizedException('Webhook signature is required');const connections=await this.prisma.marketplaceConnection.findMany({where:{provider:String(provider).toLowerCase() as any,status:'connected'},select:{id:true,companyId:true,webhookSecret:true}});const raw=JSON.stringify(body??{});for(const c of connections){const secret=this.crypto.decrypt(c.webhookSecret);if(!secret)continue;const expected=createHmac('sha256',secret).update(raw).digest('hex');const candidate=header.replace(/^sha256=/,'');const a=Buffer.from(candidate);const b=Buffer.from(expected);const hmacOk=a.length===b.length&&timingSafeEqual(a,b);const sa=Buffer.from(secret);const sh=Buffer.from(header);const sharedOk=sa.length===sh.length&&timingSafeEqual(sa,sh);if(hmacOk||sharedOk){await this.prisma.marketplaceConnection.update({where:{id:c.id},data:{lastSyncAt:new Date()}});return {received:true,provider:String(provider).toLowerCase(),companyId:c.companyId,event:body?.event||body?.type||'unknown',id:body?.id??null};}}throw new UnauthorizedException('Invalid webhook signature');}
 }
