@@ -51,7 +51,7 @@ class MarketplaceScreen extends StatelessWidget {
                     child: Row(
                       children: [
                         CircleAvatar(
-                          backgroundColor: AppColors.accent.withOpacity(0.12),
+                          backgroundColor: AppColors.accent.withValues(alpha: 0.12),
                           child: Icon(ch.icon, color: AppColors.accent),
                         ),
                         const SizedBox(width: 14),

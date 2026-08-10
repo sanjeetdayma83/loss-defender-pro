@@ -75,7 +75,7 @@ class _CameraScannerPageState extends State<CameraScannerPage> {
             child: Text(
               'Align barcode inside the frame',
               textAlign: TextAlign.center,
-              style: TextStyle(color: Colors.white.withOpacity(0.9), fontSize: 14),
+              style: TextStyle(color: Colors.white.withValues(alpha: 0.9), fontSize: 14),
             ),
           ),
         ],

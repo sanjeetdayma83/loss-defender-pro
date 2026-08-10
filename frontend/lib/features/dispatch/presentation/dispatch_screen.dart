@@ -2,7 +2,6 @@ import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import '../../../core/network/api_client.dart';
 import '../../../core/theme/app_theme.dart';
-import '../../../core/widgets/app_dialogs.dart';
 
 class DispatchScreen extends StatefulWidget {
   const DispatchScreen({super.key});
@@ -286,7 +285,7 @@ class _DispatchScreenState extends State<DispatchScreen> {
     return ListView.separated(
       padding: const EdgeInsets.fromLTRB(24, 0, 16, 24),
       itemCount: filtered.length,
-      separatorBuilder: (_, __) => const SizedBox(height: 8),
+      separatorBuilder: (_, _) => const SizedBox(height: 8),
       itemBuilder: (context, i) {
         final o = filtered[i] as Map<String, dynamic>;
         final status = o['status']?.toString() ?? '';
@@ -321,7 +320,7 @@ class _DispatchScreenState extends State<DispatchScreen> {
                   padding:
                       const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF3B82F6).withOpacity(0.1),
+                    color: const Color(0xFF3B82F6).withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(20),
                   ),
                   child: Text(status,
@@ -434,7 +433,7 @@ class _Kpi extends StatelessWidget {
           Container(
             padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
-              color: c.withOpacity(0.12),
+              color: c.withValues(alpha: 0.12),
               borderRadius: BorderRadius.circular(10),
             ),
             child: Icon(i, color: c, size: 18),

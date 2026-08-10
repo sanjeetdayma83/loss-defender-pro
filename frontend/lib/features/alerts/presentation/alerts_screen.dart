@@ -1,4 +1,3 @@
-import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import '../../../core/network/api_client.dart';
 import '../../../core/theme/app_theme.dart';
@@ -59,7 +58,7 @@ class _AlertsScreenState extends State<AlertsScreen> {
                   : ListView.separated(
                       padding: EdgeInsets.all(isWide ? 24 : 16),
                       itemCount: _list.length,
-                      separatorBuilder: (_, __) => const SizedBox(height: 8),
+                      separatorBuilder: (_, _) => const SizedBox(height: 8),
                       itemBuilder: (context, i) {
                         final a = _list[i] as Map<String, dynamic>;
                         return Container(

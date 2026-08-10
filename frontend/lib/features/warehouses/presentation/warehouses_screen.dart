@@ -307,7 +307,7 @@ class _WarehousesScreenState extends State<WarehousesScreen> {
     return ListView.separated(
       padding: const EdgeInsets.fromLTRB(24, 0, 16, 24),
       itemCount: filtered.length,
-      separatorBuilder: (_, __) => const SizedBox(height: 8),
+      separatorBuilder: (_, _) => const SizedBox(height: 8),
       itemBuilder: (context, i) {
         final w = filtered[i] as Map<String, dynamic>;
         final name = w['name']?.toString() ?? '—';
@@ -336,7 +336,7 @@ class _WarehousesScreenState extends State<WarehousesScreen> {
                   width: 44,
                   height: 44,
                   decoration: BoxDecoration(
-                    color: const Color(0xFF2563EB).withOpacity(0.1),
+                    color: const Color(0xFF2563EB).withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(10),
                   ),
                   child: Center(
@@ -516,7 +516,7 @@ class _Kpi extends StatelessWidget {
           Container(
             padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
-              color: c.withOpacity(0.12),
+              color: c.withValues(alpha: 0.12),
               borderRadius: BorderRadius.circular(10),
             ),
             child: Icon(i, color: c, size: 18),

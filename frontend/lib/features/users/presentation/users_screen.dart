@@ -193,7 +193,7 @@ class _UsersScreenState extends State<UsersScreen> {
                 ),
                 const SizedBox(height: 12),
                 DropdownButtonFormField<String>(
-                  value: role,
+                  initialValue: role,
                   decoration: const InputDecoration(
                       labelText: 'Role', border: OutlineInputBorder()),
                   items: roles
@@ -438,7 +438,7 @@ class _UsersScreenState extends State<UsersScreen> {
     return ListView.separated(
       padding: const EdgeInsets.fromLTRB(24, 0, 16, 24),
       itemCount: filtered.length,
-      separatorBuilder: (_, __) => const SizedBox(height: 8),
+      separatorBuilder: (_, _) => const SizedBox(height: 8),
       itemBuilder: (context, i) {
         final u = filtered[i] as Map<String, dynamic>;
         final name = u['name']?.toString() ?? '—';
@@ -465,7 +465,7 @@ class _UsersScreenState extends State<UsersScreen> {
               children: [
                 CircleAvatar(
                   radius: 20,
-                  backgroundColor: rc.withOpacity(0.15),
+                  backgroundColor: rc.withValues(alpha: 0.15),
                   child: Text(initial,
                       style: TextStyle(
                           fontWeight: FontWeight.w700, color: rc)),
@@ -489,7 +489,7 @@ class _UsersScreenState extends State<UsersScreen> {
                   padding:
                       const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                   decoration: BoxDecoration(
-                    color: rc.withOpacity(0.12),
+                    color: rc.withValues(alpha: 0.12),
                     borderRadius: BorderRadius.circular(20),
                   ),
                   child: Text(_roleLabel(role),
@@ -572,7 +572,7 @@ class _UsersScreenState extends State<UsersScreen> {
           Center(
             child: CircleAvatar(
               radius: 36,
-              backgroundColor: rc.withOpacity(0.15),
+              backgroundColor: rc.withValues(alpha: 0.15),
               child: Text(initial,
                   style: TextStyle(
                       fontSize: 28, fontWeight: FontWeight.w700, color: rc)),
@@ -590,7 +590,7 @@ class _UsersScreenState extends State<UsersScreen> {
               padding:
                   const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
               decoration: BoxDecoration(
-                color: rc.withOpacity(0.12),
+                color: rc.withValues(alpha: 0.12),
                 borderRadius: BorderRadius.circular(20),
               ),
               child: Text(_roleLabel(role),
@@ -677,7 +677,7 @@ class _Kpi extends StatelessWidget {
           Container(
             padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
-              color: c.withOpacity(0.12),
+              color: c.withValues(alpha: 0.12),
               borderRadius: BorderRadius.circular(10),
             ),
             child: Icon(i, color: c, size: 18),

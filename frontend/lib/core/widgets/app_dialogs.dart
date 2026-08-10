@@ -339,7 +339,7 @@ class AppDialogs {
             const SizedBox(height: 12),
             StatefulBuilder(
               builder: (ctx, setLocal) => DropdownButtonFormField<String>(
-                value: role,
+                initialValue: role,
                 decoration: const InputDecoration(
                   labelText: 'Role',
                   border: OutlineInputBorder(),
@@ -372,7 +372,9 @@ class AppDialogs {
                 FilledButton(
                   onPressed: () {
                     if (nameCtrl.text.trim().isEmpty ||
-                        emailCtrl.text.trim().isEmpty) return;
+                        emailCtrl.text.trim().isEmpty) {
+                      return;
+                    }
                     Navigator.pop(context, {
                       'name': nameCtrl.text.trim(),
                       'email': emailCtrl.text.trim(),

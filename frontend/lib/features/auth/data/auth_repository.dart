@@ -12,7 +12,7 @@ class AuthRepository {
     final response = await _dio.post('/auth/login', data: {
       'email': email,
       'password': password,
-      if (deviceId != null) 'deviceId': deviceId,
+      'deviceId': ?deviceId,
     });
 
     final body = response.data;

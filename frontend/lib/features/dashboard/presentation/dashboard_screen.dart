@@ -1,4 +1,3 @@
-import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import '../../../core/network/api_client.dart';
 import '../../../core/theme/app_theme.dart';
@@ -245,14 +244,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 width: 100,
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: s.$3.withOpacity(0.08),
+                  color: s.$3.withValues(alpha: 0.08),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Column(
                   children: [
                     CircleAvatar(
                       radius: 16,
-                      backgroundColor: s.$3.withOpacity(0.2),
+                      backgroundColor: s.$3.withValues(alpha: 0.2),
                       child: Text('${s.$2}',
                           style: TextStyle(
                               fontSize: 11,
@@ -432,7 +431,7 @@ class _Kpi extends StatelessWidget {
           Container(
             padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
-              color: c.withOpacity(0.12),
+              color: c.withValues(alpha: 0.12),
               borderRadius: BorderRadius.circular(10),
             ),
             child: Icon(i, color: c, size: 18),

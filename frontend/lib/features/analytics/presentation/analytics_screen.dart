@@ -1,4 +1,3 @@
-import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import '../../../core/network/api_client.dart';
 import '../../../core/theme/app_theme.dart';
@@ -66,20 +65,20 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
         ApiClient.instance.dio.get('/analytics/kpis').catchError((_) => null),
       ]);
 
-      final orders = results[0] != null ? _asList(results[0].data) : <dynamic>[];
+      final orders = _asList(results[0].data);
       final warehouses =
-          results[1] != null ? _asList(results[1].data) : <dynamic>[];
-      final users = results[2] != null ? _asList(results[2].data) : <dynamic>[];
+          _asList(results[1].data);
+      final users = _asList(results[2].data);
       final recordings =
-          results[3] != null ? _asList(results[3].data) : <dynamic>[];
+          _asList(results[3].data);
       final evidence =
-          results[4] != null ? _asList(results[4].data) : <dynamic>[];
+          _asList(results[4].data);
       final claims =
-          results[5] != null ? _asList(results[5].data) : <dynamic>[];
+          _asList(results[5].data);
       final company =
-          results[6] != null ? _asMap(results[6].data) : null;
+          _asMap(results[6].data);
       final kpis =
-          results[7] != null ? _asMap(results[7].data) : null;
+          _asMap(results[7].data);
 
       final statusMap = <String, int>{};
       var verified = 0;
@@ -404,7 +403,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                       CircleAvatar(
                         radius: 14,
                         backgroundColor:
-                            const Color(0xFF2563EB).withOpacity(0.1),
+                            const Color(0xFF2563EB).withValues(alpha: 0.1),
                         child: Text('${i + 1}',
                             style: const TextStyle(
                                 fontSize: 11,
@@ -472,7 +471,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                         padding: const EdgeInsets.symmetric(
                             horizontal: 8, vertical: 2),
                         decoration: BoxDecoration(
-                          color: const Color(0xFF3B82F6).withOpacity(0.1),
+                          color: const Color(0xFF3B82F6).withValues(alpha: 0.1),
                           borderRadius: BorderRadius.circular(12),
                         ),
                         child: Text(o['status']?.toString() ?? '',
@@ -510,7 +509,7 @@ class _Kpi extends StatelessWidget {
           Container(
             padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
-              color: c.withOpacity(0.12),
+              color: c.withValues(alpha: 0.12),
               borderRadius: BorderRadius.circular(10),
             ),
             child: Icon(i, color: c, size: 18),
