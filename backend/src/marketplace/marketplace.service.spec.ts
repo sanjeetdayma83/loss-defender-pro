@@ -9,16 +9,14 @@ describe('MarketplaceService', () => {
 
   it('list returns array', async () => {
     const prisma = {
-      marketplaceConnection: {
-        findMany: jest.fn().mockResolvedValue([]),
-      },
+      marketplaceConnection: { findMany: jest.fn().mockResolvedValue([]) },
     } as any;
     const svc = new MarketplaceService(prisma, crypto);
     const rows = await svc.list('c1');
     expect(Array.isArray(rows)).toBe(true);
   });
 
-  it('refuses fabricated sync success for an unimplemented provider', async () => {
+  it('refuses Amazon sync when required SP-API credentials are missing', async () => {
     const prisma = {
       marketplaceConnection: {
         findFirst: jest.fn().mockResolvedValue({
@@ -27,21 +25,41 @@ describe('MarketplaceService', () => {
           provider: 'amazon',
           status: 'connected',
           accessToken: 'enc:token',
+          refreshToken: null,
+          meta: null,
         }),
       },
     } as any;
     const svc = new MarketplaceService(prisma, crypto);
     await expect(svc.syncOrders('c1', 'amazon')).rejects.toThrow(
-      'live connector is not configured',
+      'Amazon SP-API is not configured',
+    );
+  });
+
+  it('refuses Meesho sync when official seller API configuration is missing', async () => {
+    const prisma = {
+      marketplaceConnection: {
+        findFirst: jest.fn().mockResolvedValue({
+          id: 'mc2',
+          companyId: 'c1',
+          provider: 'meesho',
+          status: 'connected',
+          accessToken: null,
+          refreshToken: null,
+          meta: null,
+        }),
+      },
+    } as any;
+    const svc = new MarketplaceService(prisma, crypto);
+    await expect(svc.syncOrders('c1', 'meesho')).rejects.toThrow(
+      'Meesho API is not configured',
     );
   });
 
   it('rejects webhook without a signature', async () => {
     const prisma = { marketplaceConnection: { findMany: jest.fn() } } as any;
     const svc = new MarketplaceService(prisma, crypto);
-    await expect(
-      svc.handleWebhook('amazon', { event: 'order.created', id: '1' }),
-    ).rejects.toThrow('Webhook signature is required');
+    await expect(svc.handleWebhook('amazon', { event: 'order.created', id: '1' })).rejects.toThrow('Webhook signature is required');
     expect(prisma.marketplaceConnection.findMany).not.toHaveBeenCalled();
   });
 
