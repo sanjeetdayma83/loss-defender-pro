@@ -2,7 +2,6 @@ import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import '../../../core/network/api_client.dart';
 import '../../../core/theme/app_theme.dart';
-import '../../../core/widgets/app_dialogs.dart';
 
 class DispatchScreen extends StatefulWidget {
   const DispatchScreen({super.key});
@@ -164,7 +163,7 @@ class _DispatchScreenState extends State<DispatchScreen> {
     return ListView.separated(
       padding: const EdgeInsets.fromLTRB(24, 0, 16, 24),
       itemCount: filtered.length,
-      separatorBuilder: (_, __) => const SizedBox(height: 8),
+      separatorBuilder: (_, _) => const SizedBox(height: 8),
       itemBuilder: (context, i) {
         final o = filtered[i] as Map<String, dynamic>;
         final status = o['status']?.toString() ?? '';
@@ -177,7 +176,7 @@ class _DispatchScreenState extends State<DispatchScreen> {
           child: Row(children: [
             Expanded(flex: 2, child: Text(id, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13, color: Color(0xFF2563EB)))),
             Expanded(child: Text(awb, style: const TextStyle(fontSize: 12))),
-            Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3), decoration: BoxDecoration(color: const Color(0xFF3B82F6).withOpacity(0.1), borderRadius: BorderRadius.circular(20)), child: Text(status, style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: Color(0xFF2563EB)))),
+            Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3), decoration: BoxDecoration(color: const Color(0xFF3B82F6).withValues(alpha: 0.1), borderRadius: BorderRadius.circular(20)), child: Text(status, style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: Color(0xFF2563EB)))),
             const SizedBox(width: 8),
             if (_isReady(status.toLowerCase())) IconButton(icon: const Icon(Icons.local_shipping_outlined, size: 20), tooltip: 'Dispatch', onPressed: () => _markDispatched(o)),
           ]),
@@ -218,9 +217,10 @@ class _Kpi extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(padding: const EdgeInsets.all(14), decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12), border: Border.all(color: AppColors.border)), child: Row(children: [
-      Container(padding: const EdgeInsets.all(8), decoration: BoxDecoration(color: c.withOpacity(0.12), borderRadius: BorderRadius.circular(10)), child: Icon(i, color: c, size: 18)),
+      Container(padding: const EdgeInsets.all(8), decoration: BoxDecoration(color: c.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(10)), child: Icon(i, color: c, size: 18)),
       const SizedBox(width: 12),
       Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisAlignment: MainAxisAlignment.center, children: [Text(v, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800)), Text(t, style: const TextStyle(fontSize: 11, color: AppColors.textSecondary))])),
     ]));
   }
 }
+

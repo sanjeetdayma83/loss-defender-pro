@@ -158,7 +158,7 @@ class _UsersScreenState extends State<UsersScreen> {
                 TextField(controller: phoneCtrl, decoration: const InputDecoration(labelText: 'Phone', border: OutlineInputBorder())),
                 const SizedBox(height: 12),
                 DropdownButtonFormField<String>(
-                  value: role,
+                  initialValue: role,
                   decoration: const InputDecoration(labelText: 'Role', border: OutlineInputBorder()),
                   items: roles.map((e) => DropdownMenuItem(value: e, child: Text(_roleLabel(e)))).toList(),
                   onChanged: (v) => setLocal(() => role = v ?? role),
@@ -314,7 +314,7 @@ class _UsersScreenState extends State<UsersScreen> {
     return ListView.separated(
       padding: const EdgeInsets.fromLTRB(24, 0, 16, 24),
       itemCount: filtered.length,
-      separatorBuilder: (_, __) => const SizedBox(height: 8),
+      separatorBuilder: (_, _) => const SizedBox(height: 8),
       itemBuilder: (context, i) {
         final u = filtered[i] as Map<String, dynamic>;
         final name = u['name']?.toString() ?? '—';
@@ -329,10 +329,10 @@ class _UsersScreenState extends State<UsersScreen> {
           padding: const EdgeInsets.all(14),
           decoration: BoxDecoration(color: sel ? const Color(0xFFEFF6FF) : Colors.white, borderRadius: BorderRadius.circular(12), border: Border.all(color: sel ? const Color(0xFF2563EB) : AppColors.border)),
           child: Row(children: [
-            CircleAvatar(radius: 20, backgroundColor: rc.withOpacity(0.15), child: Text(initial, style: TextStyle(fontWeight: FontWeight.w700, color: rc))),
+            CircleAvatar(radius: 20, backgroundColor: rc.withValues(alpha: 0.15), child: Text(initial, style: TextStyle(fontWeight: FontWeight.w700, color: rc))),
             const SizedBox(width: 12),
             Expanded(flex: 2, child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(name, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13)), Text(email, style: const TextStyle(fontSize: 11, color: AppColors.textSecondary))])),
-            Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3), decoration: BoxDecoration(color: rc.withOpacity(0.12), borderRadius: BorderRadius.circular(20)), child: Text(_roleLabel(role), style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: rc))),
+            Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3), decoration: BoxDecoration(color: rc.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(20)), child: Text(_roleLabel(role), style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: rc))),
             const SizedBox(width: 10),
             Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3), decoration: BoxDecoration(color: active ? const Color(0xFFDCFCE7) : const Color(0xFFF1F5F9), borderRadius: BorderRadius.circular(20)), child: Text(status, style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: active ? const Color(0xFF16A34A) : AppColors.textSecondary))),
           ]),
@@ -358,11 +358,11 @@ class _UsersScreenState extends State<UsersScreen> {
       child: ListView(children: [
         Row(children: [const Expanded(child: Text('User Details', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15))), IconButton(icon: const Icon(Icons.close, size: 18), onPressed: () => setState(() => _selected = null))]),
         const SizedBox(height: 8),
-        Center(child: CircleAvatar(radius: 36, backgroundColor: rc.withOpacity(0.15), child: Text(initial, style: TextStyle(fontSize: 28, fontWeight: FontWeight.w700, color: rc)))),
+        Center(child: CircleAvatar(radius: 36, backgroundColor: rc.withValues(alpha: 0.15), child: Text(initial, style: TextStyle(fontSize: 28, fontWeight: FontWeight.w700, color: rc)))),
         const SizedBox(height: 12),
         Center(child: Text(name, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 16))),
         const SizedBox(height: 4),
-        Center(child: Container(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3), decoration: BoxDecoration(color: rc.withOpacity(0.12), borderRadius: BorderRadius.circular(20)), child: Text(_roleLabel(role), style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: rc)))),
+        Center(child: Container(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3), decoration: BoxDecoration(color: rc.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(20)), child: Text(_roleLabel(role), style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: rc)))),
         const SizedBox(height: 20),
         _row(Icons.mail_outline, 'Email', u['email']?.toString() ?? '—'),
         _row(Icons.phone_outlined, 'Phone', u['phone']?.toString() ?? '—'),
@@ -387,9 +387,10 @@ class _Kpi extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(padding: const EdgeInsets.all(14), decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12), border: Border.all(color: AppColors.border)), child: Row(children: [
-      Container(padding: const EdgeInsets.all(8), decoration: BoxDecoration(color: c.withOpacity(0.12), borderRadius: BorderRadius.circular(10)), child: Icon(i, color: c, size: 18)),
+      Container(padding: const EdgeInsets.all(8), decoration: BoxDecoration(color: c.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(10)), child: Icon(i, color: c, size: 18)),
       const SizedBox(width: 12),
       Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisAlignment: MainAxisAlignment.center, children: [Text(v, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800)), Text(t, style: const TextStyle(fontSize: 11, color: AppColors.textSecondary))])),
     ]));
   }
 }
+

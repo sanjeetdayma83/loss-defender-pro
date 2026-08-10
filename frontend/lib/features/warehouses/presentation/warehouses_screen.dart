@@ -213,7 +213,7 @@ class _WarehousesScreenState extends State<WarehousesScreen> {
     return ListView.separated(
       padding: const EdgeInsets.fromLTRB(24, 0, 16, 24),
       itemCount: filtered.length,
-      separatorBuilder: (_, __) => const SizedBox(height: 8),
+      separatorBuilder: (_, _) => const SizedBox(height: 8),
       itemBuilder: (context, i) {
         final w = filtered[i] as Map<String, dynamic>;
         final name = w['name']?.toString() ?? '—';
@@ -228,7 +228,7 @@ class _WarehousesScreenState extends State<WarehousesScreen> {
           padding: const EdgeInsets.all(14),
           decoration: BoxDecoration(color: sel ? const Color(0xFFEFF6FF) : Colors.white, borderRadius: BorderRadius.circular(12), border: Border.all(color: sel ? const Color(0xFF2563EB) : AppColors.border)),
           child: Row(children: [
-            Container(width: 44, height: 44, decoration: BoxDecoration(color: const Color(0xFF2563EB).withOpacity(0.1), borderRadius: BorderRadius.circular(10)), child: Center(child: Text(initial, style: const TextStyle(fontWeight: FontWeight.w800, color: Color(0xFF2563EB))))),
+            Container(width: 44, height: 44, decoration: BoxDecoration(color: const Color(0xFF2563EB).withValues(alpha: 0.1), borderRadius: BorderRadius.circular(10)), child: Center(child: Text(initial, style: const TextStyle(fontWeight: FontWeight.w800, color: Color(0xFF2563EB))))),
             const SizedBox(width: 12),
             Expanded(flex: 2, child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(name, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13)), if (code.isNotEmpty) Text(code, style: const TextStyle(fontSize: 11, color: AppColors.textSecondary))])),
             Expanded(child: Text(city.isEmpty ? '—' : city, style: const TextStyle(fontSize: 12), overflow: TextOverflow.ellipsis)),
@@ -283,9 +283,10 @@ class _Kpi extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(padding: const EdgeInsets.all(14), decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12), border: Border.all(color: AppColors.border)), child: Row(children: [
-      Container(padding: const EdgeInsets.all(8), decoration: BoxDecoration(color: c.withOpacity(0.12), borderRadius: BorderRadius.circular(10)), child: Icon(i, color: c, size: 18)),
+      Container(padding: const EdgeInsets.all(8), decoration: BoxDecoration(color: c.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(10)), child: Icon(i, color: c, size: 18)),
       const SizedBox(width: 12),
       Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisAlignment: MainAxisAlignment.center, children: [Text(v, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800)), Text(t, style: const TextStyle(fontSize: 11, color: AppColors.textSecondary))])),
     ]));
   }
 }
+
