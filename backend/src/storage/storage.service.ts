@@ -188,4 +188,17 @@ export class StorageService {
     );
     return { configured: true, aborted: true };
   }
+  async uploadBuffer(key: string, body: Buffer, contentType = 'application/octet-stream') {
+    if (!this.configured || !this.client || !this.bucket) {
+      return { configured: false, key, etag: null as string | null };
+    }
+    const cmd = new PutObjectCommand({
+      Bucket: this.bucket,
+      Key: key,
+      Body: body,
+      ContentType: contentType,
+    });
+    const out = await this.client.send(cmd);
+    return { configured: true, key, etag: out.ETag ?? null };
+  }
 }
