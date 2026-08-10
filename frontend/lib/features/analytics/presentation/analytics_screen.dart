@@ -1,3 +1,4 @@
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import '../../../core/network/api_client.dart';
 import '../../../core/theme/app_theme.dart';
@@ -48,37 +49,55 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
     return null;
   }
 
+  Future<Response<dynamic>?> _getOrNull(String path) async {
+    try {
+      return await ApiClient.instance.dio.get(path);
+    } on DioException {
+      return null;
+    }
+  }
+
   Future<void> _load() async {
     setState(() {
       _loading = true;
       _error = null;
     });
     try {
-      final results = await Future.wait([
-        ApiClient.instance.dio.get('/orders').catchError((_) => null),
-        ApiClient.instance.dio.get('/warehouses').catchError((_) => null),
-        ApiClient.instance.dio.get('/users').catchError((_) => null),
-        ApiClient.instance.dio.get('/recordings').catchError((_) => null),
-        ApiClient.instance.dio.get('/evidence').catchError((_) => null),
-        ApiClient.instance.dio.get('/claims').catchError((_) => null),
-        ApiClient.instance.dio.get('/companies/me').catchError((_) => null),
-        ApiClient.instance.dio.get('/analytics/kpis').catchError((_) => null),
+      final results = await Future.wait<Response<dynamic>?>([
+        _getOrNull('/orders'),
+        _getOrNull('/warehouses'),
+        _getOrNull('/users'),
+        _getOrNull('/recordings'),
+        _getOrNull('/evidence'),
+        _getOrNull('/claims'),
+        _getOrNull('/companies/me'),
+        _getOrNull('/analytics/kpis'),
       ]);
 
-      final orders = _asList(results[0].data);
-      final warehouses =
-          _asList(results[1].data);
-      final users = _asList(results[2].data);
-      final recordings =
-          _asList(results[3].data);
-      final evidence =
-          _asList(results[4].data);
-      final claims =
-          _asList(results[5].data);
-      final company =
-          _asMap(results[6].data);
-      final kpis =
-          _asMap(results[7].data);
+      final orders = results[0] != null
+          ? _asList(results[0]!.data)
+          : <dynamic>[];
+      final warehouses = results[1] != null
+          ? _asList(results[1]!.data)
+          : <dynamic>[];
+      final users = results[2] != null
+          ? _asList(results[2]!.data)
+          : <dynamic>[];
+      final recordings = results[3] != null
+          ? _asList(results[3]!.data)
+          : <dynamic>[];
+      final evidence = results[4] != null
+          ? _asList(results[4]!.data)
+          : <dynamic>[];
+      final claims = results[5] != null
+          ? _asList(results[5]!.data)
+          : <dynamic>[];
+      final company = results[6] != null
+          ? _asMap(results[6]!.data)
+          : null;
+      final kpis = results[7] != null
+          ? _asMap(results[7]!.data)
+          : null;
 
       final statusMap = <String, int>{};
       var verified = 0;
@@ -123,6 +142,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
         _loading = false;
       });
     } catch (e) {
+      if (!mounted) return;
       setState(() {
         _error = e.toString();
         _loading = false;
@@ -161,8 +181,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
     final storagePct = _storageQuota > 0
         ? (_storageUsed / _storageQuota).clamp(0.0, 1.0)
         : 0.0;
-    final verifyRate =
-        _orders > 0 ? (_verified / _orders * 100) : 0.0;
+    final verifyRate = _orders > 0 ? (_verified / _orders * 100) : 0.0;
 
     return RefreshIndicator(
       onRefresh: _load,
@@ -190,8 +209,6 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
             ],
           ),
           const SizedBox(height: 20),
-
-          // KPI grid
           LayoutBuilder(builder: (context, c) {
             final cross = c.maxWidth > 1000
                 ? 6
@@ -222,7 +239,6 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
             );
           }),
           const SizedBox(height: 20),
-
           if (isWide)
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -238,7 +254,6 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
             _storageCard(storagePct, verifyRate),
           ],
           const SizedBox(height: 16),
-
           if (isWide)
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -403,7 +418,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                       CircleAvatar(
                         radius: 14,
                         backgroundColor:
-                            const Color(0xFF2563EB).withValues(alpha: 0.1),
+                            const Color(0xFF2563EB).withOpacity(0.1),
                         child: Text('${i + 1}',
                             style: const TextStyle(
                                 fontSize: 11,
@@ -471,7 +486,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                         padding: const EdgeInsets.symmetric(
                             horizontal: 8, vertical: 2),
                         decoration: BoxDecoration(
-                          color: const Color(0xFF3B82F6).withValues(alpha: 0.1),
+                          color: const Color(0xFF3B82F6).withOpacity(0.1),
                           borderRadius: BorderRadius.circular(12),
                         ),
                         child: Text(o['status']?.toString() ?? '',
@@ -509,7 +524,7 @@ class _Kpi extends StatelessWidget {
           Container(
             padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
-              color: c.withValues(alpha: 0.12),
+              color: c.withOpacity(0.12),
               borderRadius: BorderRadius.circular(10),
             ),
             child: Icon(i, color: c, size: 18),

@@ -46,6 +46,7 @@ class _ScannerScreenState extends State<ScannerScreen> {
         'orderId': orderId,
         'barcode': barcode,
       });
+      if (!mounted) return;
       final body = res.data;
       final data = body is Map && body['data'] != null ? body['data'] : body;
       final result = data is Map ? data['result']?.toString() : null;
@@ -57,6 +58,7 @@ class _ScannerScreenState extends State<ScannerScreen> {
             title: 'Scan result', message: '$result — $barcode');
       }
     } on DioException catch (e) {
+      if (!mounted) return;
       final msg = e.response?.data is Map
           ? (e.response!.data['message'] ??
               e.response!.data['error']?['message'] ??
@@ -64,11 +66,13 @@ class _ScannerScreenState extends State<ScannerScreen> {
           : e.message;
       final code = e.response?.statusCode;
       if (code == 409) {
-        await AppDialogs.duplicateScan(context, message: msg?.toString() ?? 'Duplicate');
+        await AppDialogs.duplicateScan(
+            context, message: msg?.toString() ?? 'Duplicate');
       } else {
-        await AppDialogs.error(context, message: msg?.toString() ?? 'Scan failed');
+        await AppDialogs.error(
+            context, message: msg?.toString() ?? 'Scan failed');
       }
-      setState(() => _lastResult = 'ERR: $msg');
+      if (mounted) setState(() => _lastResult = 'ERR: $msg');
     } finally {
       if (mounted) setState(() => _busy = false);
     }
