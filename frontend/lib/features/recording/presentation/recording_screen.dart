@@ -105,7 +105,7 @@ class _RecordingScreenState extends State<RecordingScreen> {
                           child: Column(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              Icon(Icons.videocam_off_outlined, size: 48, color: AppColors.textSecondary.withOpacity(0.35)),
+                              Icon(Icons.videocam_off_outlined, size: 48, color: AppColors.textSecondary.withValues(alpha: 0.35)),
                               const SizedBox(height: 12),
                               const Text('No recordings yet', style: TextStyle(fontWeight: FontWeight.w600)),
                             ],
@@ -114,7 +114,7 @@ class _RecordingScreenState extends State<RecordingScreen> {
                       : ListView.separated(
                           padding: EdgeInsets.all(isWide ? 24 : 16),
                           itemCount: _list.length,
-                          separatorBuilder: (_, __) => const SizedBox(height: 8),
+                          separatorBuilder: (_, _) => const SizedBox(height: 8),
                           itemBuilder: (context, i) {
                             final r = _list[i] as Map<String, dynamic>;
                             final status = r['status']?.toString() ?? '';
@@ -133,7 +133,7 @@ class _RecordingScreenState extends State<RecordingScreen> {
                                   Container(
                                     width: 40, height: 40,
                                     decoration: BoxDecoration(
-                                      color: AppColors.accent.withOpacity(0.12),
+                                      color: AppColors.accent.withValues(alpha: 0.12),
                                       borderRadius: BorderRadius.circular(10),
                                     ),
                                     child: const Icon(Icons.videocam, color: AppColors.accent, size: 20),
@@ -181,7 +181,7 @@ class _Chip extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.12),
+        color: color.withValues(alpha: 0.12),
         borderRadius: BorderRadius.circular(20),
       ),
       child: Text('$label: $value',

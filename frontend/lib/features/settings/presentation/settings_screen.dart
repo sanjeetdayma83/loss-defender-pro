@@ -34,6 +34,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Future<void> _load() async {
+    if (!mounted) return;
     setState(() {
       _loading = true;
       _error = null;
@@ -55,6 +56,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         if (data is Map) company = Map<String, dynamic>.from(data);
       } catch (_) {}
 
+      if (!mounted) return;
       _nameCtrl.text = user?['name']?.toString() ?? '';
       _phoneCtrl.text = user?['phone']?.toString() ?? '';
       setState(() {
@@ -63,6 +65,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         _loading = false;
       });
     } catch (e) {
+      if (!mounted) return;
       setState(() {
         _error = e.toString();
         _loading = false;
@@ -76,26 +79,32 @@ class _SettingsScreenState extends State<SettingsScreen> {
         'name': _nameCtrl.text.trim(),
         'phone': _phoneCtrl.text.trim(),
       });
+      if (!mounted) return;
       await AppDialogs.success(context, message: 'Profile updated');
-      _load();
+      if (!mounted) return;
+      await _load();
     } on DioException catch (e) {
+      if (!mounted) return;
       await AppDialogs.error(context,
-          message: e.response?.data?['message']?.toString() ?? e.message ?? 'Failed');
+          message: e.response?.data?['message']?.toString() ??
+              e.message ??
+              'Failed');
     }
   }
 
   Future<void> _changePassword() async {
     final data = await AppFormDialogs.changePassword(context);
-    if (data == null) return;
+    if (data == null || !mounted) return;
     try {
       await ApiClient.instance.dio.post('/auth/change-password', data: data);
+      if (!mounted) return;
       await AppDialogs.success(context, message: 'Password updated');
     } on DioException catch (e) {
-      // fallback message if endpoint not ready
+      if (!mounted) return;
       await AppDialogs.error(context,
           message: e.response?.data?['message']?.toString() ??
               e.message ??
-              'Change password API not available yet');
+              'Change password failed');
     }
   }
 
@@ -105,7 +114,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
     if (_loading) return const Center(child: CircularProgressIndicator());
     if (_error != null) {
-      return Center(child: Text(_error!, style: const TextStyle(color: AppColors.danger)));
+      return Center(
+          child: Text(_error!,
+              style: const TextStyle(color: AppColors.danger)));
     }
 
     return SingleChildScrollView(
@@ -130,12 +141,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const Text('Profile',
-                    style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
+                    style:
+                        TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
                 const SizedBox(height: 16),
                 Text('Email: ${_user?['email'] ?? '—'}',
                     style: const TextStyle(fontSize: 13)),
                 Text('Role: ${_user?['role'] ?? '—'}',
-                    style: const TextStyle(fontSize: 13, color: AppColors.textSecondary)),
+                    style: const TextStyle(
+                        fontSize: 13, color: AppColors.textSecondary)),
                 const SizedBox(height: 16),
                 TextField(
                   controller: _nameCtrl,
@@ -156,7 +169,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 Row(
                   children: [
                     FilledButton(
-                        onPressed: _saveProfile, child: const Text('Save Profile')),
+                        onPressed: _saveProfile,
+                        child: const Text('Save Profile')),
                     const SizedBox(width: 12),
                     OutlinedButton(
                         onPressed: _changePassword,
@@ -178,12 +192,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const Text('Company',
-                    style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
+                    style:
+                        TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
                 const SizedBox(height: 12),
                 Text(_company?['companyName']?.toString() ?? '—',
-                    style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+                    style: const TextStyle(
+                        fontSize: 14, fontWeight: FontWeight.w600)),
                 Text('Plan: ${_company?['plan'] ?? '—'}',
-                    style: const TextStyle(fontSize: 13, color: AppColors.textSecondary)),
+                    style: const TextStyle(
+                        fontSize: 13, color: AppColors.textSecondary)),
               ],
             ),
           ),

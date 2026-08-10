@@ -1,5 +1,4 @@
 import '../../features/auth/presentation/sessions_screen.dart';
-import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../shell/app_shell.dart';
 import '../storage/secure_storage.dart';
@@ -28,27 +27,27 @@ final appRouter = GoRouter(
     return null;
   },
   routes: [
-    GoRoute(path: '/login', builder: (_, __) => const LoginScreen()),
-    GoRoute(path: '/register', builder: (_, __) => const RegisterScreen()),
+    GoRoute(path: '/login', builder: (_, _) => const LoginScreen()),
+    GoRoute(path: '/register', builder: (_, _) => const RegisterScreen()),
     ShellRoute(
       builder: (context, state, child) => AppShell(
         location: state.uri.path,
         child: child,
       ),
       routes: [
-        GoRoute(path: '/dashboard', builder: (_, __) => const DashboardScreen()),
-        GoRoute(path: '/orders', builder: (_, __) => const OrdersScreen()),
-        GoRoute(path: '/scanner', builder: (_, __) => const ScannerScreen()),
-        GoRoute(path: '/recording', builder: (_, __) => const RecordingScreen()),
-        GoRoute(path: '/dispatch', builder: (_, __) => const DispatchScreen()),
-        GoRoute(path: '/warehouses', builder: (_, __) => const WarehousesScreen()),
-        GoRoute(path: '/users', builder: (_, __) => const UsersScreen()),
-        GoRoute(path: '/analytics', builder: (_, __) => const AnalyticsScreen()),
-        GoRoute(path: '/returns', builder: (_, __) => const ReturnsScreen()),
-        GoRoute(path: '/evidence', builder: (_, __) => const EvidenceScreen()),
-        GoRoute(path: '/claims', builder: (_, __) => const ClaimsScreen()),
-        GoRoute(path: '/settings', builder: (_, __) => const SettingsScreen()),
-        GoRoute(path: '/sessions', builder: (_, __) => const SessionsScreen()),
+        GoRoute(path: '/dashboard', builder: (_, _) => const DashboardScreen()),
+        GoRoute(path: '/orders', builder: (_, _) => const OrdersScreen()),
+        GoRoute(path: '/scanner', builder: (_, _) => const ScannerScreen()),
+        GoRoute(path: '/recording', builder: (_, _) => const RecordingScreen()),
+        GoRoute(path: '/dispatch', builder: (_, _) => const DispatchScreen()),
+        GoRoute(path: '/warehouses', builder: (_, _) => const WarehousesScreen()),
+        GoRoute(path: '/users', builder: (_, _) => const UsersScreen()),
+        GoRoute(path: '/analytics', builder: (_, _) => const AnalyticsScreen()),
+        GoRoute(path: '/returns', builder: (_, _) => const ReturnsScreen()),
+        GoRoute(path: '/evidence', builder: (_, _) => const EvidenceScreen()),
+        GoRoute(path: '/claims', builder: (_, _) => const ClaimsScreen()),
+        GoRoute(path: '/settings', builder: (_, _) => const SettingsScreen()),
+        GoRoute(path: '/sessions', builder: (_, _) => const SessionsScreen()),
       ],
     ),
   ],

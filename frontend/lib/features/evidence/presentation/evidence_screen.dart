@@ -72,7 +72,7 @@ class _EvidenceScreenState extends State<EvidenceScreen> {
                           child: Column(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              Icon(Icons.photo_library_outlined, size: 48, color: AppColors.textSecondary.withOpacity(0.35)),
+                              Icon(Icons.photo_library_outlined, size: 48, color: AppColors.textSecondary.withValues(alpha: 0.35)),
                               const SizedBox(height: 12),
                               const Text('No evidence packs yet', style: TextStyle(fontWeight: FontWeight.w600)),
                             ],
@@ -81,7 +81,7 @@ class _EvidenceScreenState extends State<EvidenceScreen> {
                       : ListView.separated(
                           padding: EdgeInsets.all(isWide ? 24 : 16),
                           itemCount: _list.length,
-                          separatorBuilder: (_, __) => const SizedBox(height: 8),
+                          separatorBuilder: (_, _) => const SizedBox(height: 8),
                           itemBuilder: (context, i) {
                             final e = _list[i] as Map<String, dynamic>;
                             final id = e['id']?.toString() ?? '';
@@ -99,7 +99,7 @@ class _EvidenceScreenState extends State<EvidenceScreen> {
                                   Container(
                                     width: 40, height: 40,
                                     decoration: BoxDecoration(
-                                      color: AppColors.success.withOpacity(0.12),
+                                      color: AppColors.success.withValues(alpha: 0.12),
                                       borderRadius: BorderRadius.circular(10),
                                     ),
                                     child: const Icon(Icons.photo_library, color: AppColors.success, size: 20),

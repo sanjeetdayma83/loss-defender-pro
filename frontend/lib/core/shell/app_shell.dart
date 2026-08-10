@@ -1,4 +1,3 @@
-import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../network/api_client.dart';
@@ -92,7 +91,7 @@ class _AppShellState extends State<AppShell> {
             children: [
               CircleAvatar(
                 radius: 32,
-                backgroundColor: const Color(0xFF2563EB).withOpacity(0.15),
+                backgroundColor: const Color(0xFF2563EB).withValues(alpha: 0.15),
                 child: Text(
                   name.isNotEmpty ? name[0].toUpperCase() : '?',
                   style: const TextStyle(
@@ -254,7 +253,7 @@ class _AppShellState extends State<AppShell> {
                               CircleAvatar(
                                 radius: 16,
                                 backgroundColor:
-                                    const Color(0xFF2563EB).withOpacity(0.15),
+                                    const Color(0xFF2563EB).withValues(alpha: 0.15),
                                 child: Text(
                                   userName.isNotEmpty
                                       ? userName[0].toUpperCase()

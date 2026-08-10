@@ -142,7 +142,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
                     ),
                     const SizedBox(height: 12),
                     DropdownButtonFormField<String>(
-                      value: warehouseId,
+                      initialValue: warehouseId,
                       decoration: const InputDecoration(
                         labelText: 'Warehouse',
                         border: OutlineInputBorder(),
@@ -213,7 +213,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
       await ApiClient.instance.dio.post('/orders', data: {
         'marketplace': 'manual',
         'marketplaceOrderId': orderCtrl.text.trim(),
-        if (warehouseId != null) 'warehouseId': warehouseId,
+        'warehouseId': ?warehouseId,
         'items': [
           {
             'sku': skuCtrl.text.trim(),
@@ -392,13 +392,13 @@ class _OrdersScreenState extends State<OrdersScreen> {
             scrollDirection: Axis.horizontal,
             child: Row(
               children: [
-                _TabChip('All Orders ($total)', 'all'),
-                _TabChip('Pending ($pending)', 'pending'),
-                _TabChip(
+                _tabChip('All Orders ($total)', 'all'),
+                _tabChip('Pending ($pending)', 'pending'),
+                _tabChip(
                     'In Progress (${_countWhere((s) => ['packing', 'recording', 'scanned'].contains(s))})',
                     'progress'),
-                _TabChip('Completed ($verified)', 'completed'),
-                _TabChip('Exceptions ($exceptions)', 'exceptions'),
+                _tabChip('Completed ($verified)', 'completed'),
+                _tabChip('Exceptions ($exceptions)', 'exceptions'),
               ],
             ),
           ),
@@ -414,7 +414,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
                       : ListView.separated(
                           padding: EdgeInsets.all(isWide ? 24 : 16),
                           itemCount: filtered.length,
-                          separatorBuilder: (_, __) => const SizedBox(height: 8),
+                          separatorBuilder: (_, _) => const SizedBox(height: 8),
                           itemBuilder: (context, i) {
                             final o = filtered[i] as Map<String, dynamic>;
                             final status = o['status']?.toString() ?? '';
@@ -464,7 +464,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
                                     padding: const EdgeInsets.symmetric(
                                         horizontal: 10, vertical: 4),
                                     decoration: BoxDecoration(
-                                      color: sc.withOpacity(0.12),
+                                      color: sc.withValues(alpha: 0.12),
                                       borderRadius: BorderRadius.circular(20),
                                     ),
                                     child: Text(status.toUpperCase(),
@@ -501,7 +501,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
     );
   }
 
-  Widget _TabChip(String label, String key) {
+  Widget _tabChip(String label, String key) {
     final sel = _tab == key;
     return Padding(
       padding: const EdgeInsets.only(right: 8),
@@ -550,7 +550,7 @@ class _Kpi extends StatelessWidget {
           Container(
             padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
-              color: c.withOpacity(0.12),
+              color: c.withValues(alpha: 0.12),
               borderRadius: BorderRadius.circular(10),
             ),
             child: Icon(i, color: c, size: 18),
