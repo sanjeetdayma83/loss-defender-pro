@@ -1,5 +1,7 @@
 import {
-  Injectable, NotFoundException, ConflictException,
+  Injectable,
+  NotFoundException,
+  ConflictException,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
@@ -7,6 +9,7 @@ import { InviteUserDto, UpdateUserDto } from './dto/user.dto';
 import * as bcrypt from 'bcrypt';
 import { randomBytes, createHash } from 'crypto';
 import { EmailService } from '../email/email.service';
+import { AuthService } from '../auth/auth.service';
 
 @Injectable()
 export class UsersService {
@@ -14,27 +17,16 @@ export class UsersService {
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
     private readonly emailService: EmailService,
+    private readonly authService: AuthService,
   ) {}
 
   async list(companyId: string) {
     return this.prisma.user.findMany({
-      where: {
-        companyId,
-        status: { not: 'deleted' },
-      },
+      where: { companyId, status: { not: 'deleted' } },
       select: {
-        id: true,
-        employeeId: true,
-        email: true,
-        name: true,
-        phone: true,
-        role: true,
-        status: true,
-        warehouseId: true,
-        profilePhoto: true,
-        joiningDate: true,
-        lastLoginAt: true,
-        createdAt: true,
+        id: true, employeeId: true, email: true, name: true, phone: true,
+        role: true, status: true, warehouseId: true, profilePhoto: true,
+        joiningDate: true, lastLoginAt: true,
         warehouse: { select: { id: true, name: true, code: true } },
       },
       orderBy: { createdAt: 'desc' },
@@ -43,55 +35,27 @@ export class UsersService {
 
   async me(userId: string, companyId: string) {
     let user = await this.prisma.user.findFirst({
-      where: {
-        id: userId,
-        companyId,
-        status: { not: 'deleted' },
-      },
+      where: { id: userId, companyId, status: { not: 'deleted' } },
       select: {
-        id: true,
-        employeeId: true,
-        email: true,
-        name: true,
-        phone: true,
-        role: true,
-        status: true,
-        warehouseId: true,
-        profilePhoto: true,
-        joiningDate: true,
-        lastLoginAt: true,
-        createdAt: true,
+        id: true, employeeId: true, email: true, name: true, phone: true,
+        role: true, status: true, warehouseId: true, profilePhoto: true,
+        joiningDate: true, lastLoginAt: true, createdAt: true,
         warehouse: { select: { id: true, name: true, code: true } },
         company: { select: { id: true, companyName: true, plan: true } },
       },
     });
-
     if (!user) {
       user = await this.prisma.user.findFirst({
-        where: {
-          companyId,
-          role: 'owner',
-          status: { not: 'deleted' },
-        },
+        where: { companyId, role: 'owner', status: { not: 'deleted' } },
         select: {
-          id: true,
-          employeeId: true,
-          email: true,
-          name: true,
-          phone: true,
-          role: true,
-          status: true,
-          warehouseId: true,
-          profilePhoto: true,
-          joiningDate: true,
-          lastLoginAt: true,
-          createdAt: true,
+          id: true, employeeId: true, email: true, name: true, phone: true,
+          role: true, status: true, warehouseId: true, profilePhoto: true,
+          joiningDate: true, lastLoginAt: true, createdAt: true,
           warehouse: { select: { id: true, name: true, code: true } },
           company: { select: { id: true, companyName: true, plan: true } },
         },
       });
     }
-
     if (!user) throw new NotFoundException('User not found');
     return user;
   }
@@ -100,18 +64,9 @@ export class UsersService {
     const user = await this.prisma.user.findFirst({
       where: { id, companyId, status: { not: 'deleted' } },
       select: {
-        id: true,
-        employeeId: true,
-        email: true,
-        name: true,
-        phone: true,
-        role: true,
-        status: true,
-        warehouseId: true,
-        profilePhoto: true,
-        joiningDate: true,
-        lastLoginAt: true,
-        createdAt: true,
+        id: true, employeeId: true, email: true, name: true, phone: true,
+        role: true, status: true, warehouseId: true, profilePhoto: true,
+        joiningDate: true, lastLoginAt: true, createdAt: true,
         warehouse: { select: { id: true, name: true, code: true } },
       },
     });
@@ -122,68 +77,28 @@ export class UsersService {
   async invite(companyId: string, actorId: string, dto: InviteUserDto, ip?: string) {
     const exists = await this.prisma.user.findFirst({ where: { email: dto.email } });
     if (exists) throw new ConflictException('Email already registered');
-
     if (dto.warehouseId) {
-      const wh = await this.prisma.warehouse.findFirst({
-        where: { id: dto.warehouseId, companyId },
-      });
+      const wh = await this.prisma.warehouse.findFirst({ where: { id: dto.warehouseId, companyId } });
       if (!wh) throw new NotFoundException('Warehouse not found');
     }
-
     const tempPass = randomBytes(8).toString('hex');
     const hash = await bcrypt.hash(tempPass, 12);
-
     const created = await this.prisma.user.create({
       data: {
-        companyId,
-        email: dto.email,
-        name: dto.name,
-        phone: dto.phone ?? '',
-        role: dto.role,
-        warehouseId: dto.warehouseId,
-        passwordHash: hash,
-        status: 'pending',
+        companyId, email: dto.email, name: dto.name, phone: dto.phone ?? '',
+        role: dto.role, warehouseId: dto.warehouseId, passwordHash: hash, status: 'pending',
       },
-      select: {
-        id: true,
-        email: true,
-        name: true,
-        phone: true,
-        role: true,
-        status: true,
-        warehouseId: true,
-        createdAt: true,
-      },
+      select: { id: true, email: true, name: true, phone: true, role: true, status: true, warehouseId: true, createdAt: true },
     });
-
     const rawToken = randomBytes(32).toString('hex');
     const tokenHash = createHash('sha256').update(rawToken).digest('hex');
     await this.prisma.inviteToken.create({
-      data: {
-        userId: created.id,
-        tokenHash,
-        expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
-      },
+      data: { userId: created.id, tokenHash, expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) },
     });
-
-    await this.audit.log({
-      companyId,
-      actorId,
-      action: 'user.invite',
-      entity: 'User',
-      entityId: created.id,
-      after: created as any,
-      ipAddress: ip,
-    });
-
+    await this.audit.log({ companyId, actorId, action: 'user.invite', entity: 'User', entityId: created.id, after: created as any, ipAddress: ip });
     const appUrl = process.env.APP_URL || 'http://localhost:8080';
     const acceptUrl = `${appUrl}/accept-invite?token=${rawToken}`;
-    try {
-      await this.emailService.sendInvite(created.email, acceptUrl);
-    } catch (e: any) {
-      console.error('[invite] email failed:', e?.message || e);
-    }
-
+    try { await this.emailService.sendInvite(created.email, acceptUrl); } catch (e: any) { console.error('[invite] email failed:', e?.message || e); }
     return {
       ...created,
       ...(process.env.NODE_ENV !== 'production'
@@ -192,25 +107,15 @@ export class UsersService {
     };
   }
 
-  async update(
-    companyId: string,
-    id: string,
-    actorId: string,
-    dto: UpdateUserDto,
-    ip?: string,
-  ) {
-    const before = await this.prisma.user.findFirst({
-      where: { id, companyId, status: { not: 'deleted' } },
-    });
+  async update(companyId: string, id: string, actorId: string, dto: UpdateUserDto, ip?: string) {
+    const before = await this.prisma.user.findFirst({ where: { id, companyId, status: { not: 'deleted' } } });
     if (!before) throw new NotFoundException('User not found');
-
     if (dto.warehouseId) {
-      const wh = await this.prisma.warehouse.findFirst({
-        where: { id: dto.warehouseId, companyId },
-      });
+      const wh = await this.prisma.warehouse.findFirst({ where: { id: dto.warehouseId, companyId } });
       if (!wh) throw new NotFoundException('Warehouse not found');
     }
 
+    const roleChanged = dto.role !== undefined && dto.role !== before.role;
     const data: Record<string, unknown> = {};
     if (dto.name !== undefined) data.name = dto.name;
     if (dto.phone !== undefined) data.phone = dto.phone;
@@ -221,51 +126,37 @@ export class UsersService {
     const updated = await this.prisma.user.update({
       where: { id },
       data,
-      select: {
-        id: true,
-        email: true,
-        name: true,
-        phone: true,
-        role: true,
-        status: true,
-        warehouseId: true,
-        updatedAt: true,
-      },
+      select: { id: true, email: true, name: true, phone: true, role: true, status: true, warehouseId: true, updatedAt: true },
     });
+
+    if (roleChanged) {
+      await this.authService.revokeAllSessions(id);
+    }
 
     await this.audit.log({
       companyId,
       actorId,
-      action: 'user.update',
+      action: roleChanged ? 'user.role_changed' : 'user.update',
       entity: 'User',
       entityId: id,
       before: before as any,
       after: updated as any,
       ipAddress: ip,
     });
-
     return updated;
   }
 
   async acceptInvite(token: string, newPassword: string) {
     const tokenHash = createHash('sha256').update(token).digest('hex');
-    const invite = await this.prisma.inviteToken.findFirst({
-      where: { tokenHash, usedAt: null, expiresAt: { gt: new Date() } },
-    });
+    const invite = await this.prisma.inviteToken.findFirst({ where: { tokenHash, usedAt: null, expiresAt: { gt: new Date() } } });
     if (!invite) throw new NotFoundException('Invalid or expired invite token');
-
     const hash = await bcrypt.hash(newPassword, 12);
     const user = await this.prisma.user.update({
       where: { id: invite.userId },
       data: { passwordHash: hash, status: 'active' },
       select: { id: true, email: true, name: true, role: true, status: true, companyId: true },
     });
-
-    await this.prisma.inviteToken.update({
-      where: { id: invite.id },
-      data: { usedAt: new Date() },
-    });
-
+    await this.prisma.inviteToken.update({ where: { id: invite.id }, data: { usedAt: new Date() } });
     return user;
   }
 }
