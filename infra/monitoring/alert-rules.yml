@@ -1,0 +1,15 @@
+groups:
+  - name: loss-defender-pro
+    rules:
+      - alert: BackendDown
+        expr: up{job="loss-defender-pro-backend"} == 0
+        for: 2m
+        labels: { severity: critical }
+        annotations:
+          summary: Loss Defender Pro backend is down
+      - alert: HighBackendLatency
+        expr: histogram_quantile(0.95, rate(http_request_duration_seconds_bucket[5m])) > 1
+        for: 5m
+        labels: { severity: warning }
+        annotations:
+          summary: Backend p95 latency is above 1 second
