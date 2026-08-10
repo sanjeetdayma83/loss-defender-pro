@@ -39,11 +39,8 @@ class ApiClient {
               path.contains('/auth/register') ||
               path.contains('/auth/refresh');
 
-          if (status == 401 && !isAuthPath) {
-            // Shared in-flight refresh: if a refresh is already running,
-            // every concurrent 401 waits on the SAME future instead of
-            // bailing out and clearing the session prematurely.
-            final ok = await _sharedRefresh();
+          if (status == 401 && !isAuthPath && !_refreshing) {
+            final ok = await _tryRefresh();
             if (ok) {
               try {
                 final token = await SecureStorage.instance.getAccessToken();
@@ -71,17 +68,11 @@ class ApiClient {
   late final Dio _dio;
   Dio get dio => _dio;
 
-  // Holds the in-flight refresh call so concurrent 401s share one attempt.
-  Future<bool>? _refreshFuture;
-
-  Future<bool> _sharedRefresh() {
-    _refreshFuture ??= _tryRefresh().whenComplete(() {
-      _refreshFuture = null;
-    });
-    return _refreshFuture!;
-  }
+  bool _refreshing = false;
 
   Future<bool> _tryRefresh() async {
+    if (_refreshing) return false;
+    _refreshing = true;
     try {
       final refresh = await SecureStorage.instance.getRefreshToken();
       if (refresh == null || refresh.isEmpty) return false;
@@ -115,6 +106,8 @@ class ApiClient {
       return true;
     } catch (_) {
       return false;
+    } finally {
+      _refreshing = false;
     }
   }
 }
