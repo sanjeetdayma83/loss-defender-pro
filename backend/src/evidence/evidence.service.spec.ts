@@ -1,5 +1,6 @@
 import { execFile } from 'child_process';
 import { promisify } from 'util';
+import { createHash } from 'crypto';
 import { EvidenceService } from './evidence.service';
 
 const execFileAsync = promisify(execFile);
@@ -12,11 +13,11 @@ describe('EvidenceService production pipeline', () => {
       '-hide_banner', '-loglevel', 'error',
       '-f', 'lavfi', '-i', 'color=c=black:s=160x120:d=1',
       '-c:v', 'libvpx-vp9', '-deadline', 'realtime', '-f', 'webm', 'pipe:1',
-    ], { maxBuffer: 10 * 1024 * 1024 });
-    const video = Buffer.from(stdout, 'binary');
+    ], { maxBuffer: 10 * 1024 * 1024, encoding: 'buffer' });
+    const video = Buffer.from(stdout as Buffer);
     expect(video.length).toBeGreaterThan(0);
 
-    const segmentChecksum = require('crypto').createHash('sha256').update(video).digest('hex');
+    const segmentChecksum = createHash('sha256').update(video).digest('hex');
     const uploaded: Record<string, Buffer> = {};
     const prisma = {
       recording: {
