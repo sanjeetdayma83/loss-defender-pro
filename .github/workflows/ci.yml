@@ -10,22 +10,24 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Install FFmpeg
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
       - uses: actions/setup-node@v4
         with:
           node-version: "20"
           cache: npm
-          cache-dependency-path: package-lock.json
-      - name: Install root (workspaces) or backend
-        run: |
-          if [ -f package-lock.json ]; then npm ci; else cd backend && npm ci; fi
+          cache-dependency-path: backend/package-lock.json
+      - name: Install backend
+        working-directory: backend
+        run: npm ci
       - name: Prisma generate
         working-directory: backend
         run: npx prisma generate
         env:
           DATABASE_URL: postgresql://u:p@localhost:5432/db
-      - name: Unit tests
+      - name: Unit and evidence pipeline tests
         working-directory: backend
-        run: npm test -- --passWithNoTests
+        run: npm test -- --runInBand --passWithNoTests
         env:
           DATABASE_URL: postgresql://u:p@localhost:5432/db
           JWT_ACCESS_SECRET: ci-test-secret-min-32-characters!!
@@ -37,3 +39,28 @@ jobs:
           DATABASE_URL: postgresql://u:p@localhost:5432/db
           JWT_ACCESS_SECRET: ci-test-secret-min-32-characters!!
           JWT_REFRESH_SECRET: ci-test-refresh-secret-32-chars!!
+      - name: Verify production Docker image contains FFmpeg
+        working-directory: backend
+        run: docker build -t loss-defender-pro-backend:ci . && docker run --rm loss-defender-pro-backend:ci ffmpeg -version
+
+  frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.44.4"
+          channel: stable
+          cache: true
+      - name: Flutter dependencies
+        working-directory: frontend
+        run: flutter pub get
+      - name: Flutter analyze
+        working-directory: frontend
+        run: flutter analyze
+      - name: Flutter tests
+        working-directory: frontend
+        run: flutter test
+      - name: Flutter web build
+        working-directory: frontend
+        run: flutter build web --release
