@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Param } from '@nestjs/common';
+﻿import { Controller, Get, Post, Body, Param } from '@nestjs/common';
 import { RecordingsService } from './recordings.service';
 import { CurrentUser, AuthenticatedUser } from '../common/decorators/current-user.decorator';
 import { IsUUID, IsOptional, IsInt, IsString, Min } from 'class-validator';
@@ -22,6 +22,11 @@ class AddSegmentDto {
   @IsOptional() @IsInt() durationSec?: number;
   @IsOptional() @IsString() checksum?: string;
 }
+class ChecksumDto {
+  @IsString() checksum: string;
+  @IsOptional() @IsString() algorithm?: string;
+  @IsOptional() @IsInt() segmentIndex?: number;
+}
 
 @Controller('recordings')
 export class RecordingsController {
@@ -34,12 +39,26 @@ export class RecordingsController {
 
   @Post('start')
   start(@CurrentUser() u: AuthenticatedUser, @Body() dto: StartDto) {
-    return this.recordings.start(
-      u.companyId,
-      u.sub,
-      dto.orderId,
-      dto.warehouseId,
-    );
+    return this.recordings.start(u.companyId, u.sub, dto.orderId, dto.warehouseId);
+  }
+
+  @Post(':id/pause')
+  pause(@CurrentUser() u: AuthenticatedUser, @Param('id') id: string) {
+    return this.recordings.pause(u.companyId, id);
+  }
+
+  @Post(':id/resume')
+  resume(@CurrentUser() u: AuthenticatedUser, @Param('id') id: string) {
+    return this.recordings.resume(u.companyId, id);
+  }
+
+  @Post(':id/checksum')
+  checksum(
+    @CurrentUser() u: AuthenticatedUser,
+    @Param('id') id: string,
+    @Body() dto: ChecksumDto,
+  ) {
+    return this.recordings.setChecksum(u.companyId, id, dto);
   }
 
   @Post(':id/stop')
@@ -48,12 +67,7 @@ export class RecordingsController {
     @Param('id') id: string,
     @Body() dto: StopDto,
   ) {
-    return this.recordings.stop(
-      u.companyId,
-      id,
-      dto.durationSec,
-      dto.segmentCount,
-    );
+    return this.recordings.stop(u.companyId, id, dto.durationSec, dto.segmentCount);
   }
 
   @Post(':id/segments/presign')
@@ -63,10 +77,7 @@ export class RecordingsController {
     @Body() dto: PresignDto,
   ) {
     return this.recordings.presignSegment(
-      u.companyId,
-      id,
-      dto.segmentIndex ?? 0,
-      dto.contentType,
+      u.companyId, id, dto.segmentIndex ?? 0, dto.contentType,
     );
   }
 
@@ -76,6 +87,6 @@ export class RecordingsController {
     @Param('id') id: string,
     @Body() dto: AddSegmentDto,
   ) {
-    return this.recordings.addSegment(u.companyId, id, dto);
+    return this.recordings.addSegment(u.companyId, id, dto as any);
   }
 }

@@ -1,7 +1,4 @@
-﻿import {
-  Injectable,
-  NotFoundException,
-} from '@nestjs/common';
+﻿import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { StorageService } from '../storage/storage.service';
 
@@ -21,9 +18,37 @@ export class EvidenceService {
   }
 
   async getOne(companyId: string, id: string) {
-    const row = await this.prisma.evidence.findFirst({ where: { id, companyId } });
-    if (!row) throw new NotFoundException('Evidence not found');
-    return row;
+    const e = await this.prisma.evidence.findFirst({
+      where: { id, companyId },
+    });
+    if (!e) throw new NotFoundException('Evidence not found');
+
+    let downloadUrl: string | null = null;
+    const packKey = (e as any).packKey as string | undefined;
+    if (packKey) {
+      try {
+        const signed = await this.storage.presignGet(packKey);
+        downloadUrl = (signed as any)?.downloadUrl ?? null;
+      } catch (_) {}
+    }
+
+    const meta = ((e as any).metadata as any) || {};
+    const frames =
+      meta.frames ||
+      Array.from({ length: (e as any).frameCount || 0 }, (_, i) => ({
+        index: i,
+        type: 'placeholder',
+        label: `Frame ${i + 1}`,
+        status: 'pending_extract',
+      }));
+
+    return {
+      ...e,
+      downloadUrl,
+      frames,
+      thumbnailUrl: meta.thumbnailUrl ?? null,
+      processingStatus: meta.processingStatus ?? (e as any).status,
+    };
   }
 
   async getDownloadUrl(companyId: string, id: string) {
@@ -37,31 +62,49 @@ export class EvidenceService {
     return { ...signed, evidenceId: id };
   }
 
-  /** Called from RecordingsService.stop — creates evidence + optional pack */
   async createFromRecording(
     companyId: string,
     orderId: string,
     recordingId: string,
     segmentCount = 1,
   ) {
+    const frameCount = Math.max(segmentCount, 1) * 3;
+    const frames = Array.from({ length: frameCount }, (_, i) => ({
+      index: i,
+      type: i % 3 === 0 ? 'keyframe' : 'sample',
+      label: `Frame ${i + 1}`,
+      status: 'pending_extract',
+    }));
+
     let evidence = await this.prisma.evidence.create({
       data: {
         companyId,
         orderId,
         recordingId,
         status: 'pending',
-        frameCount: segmentCount,
+        frameCount,
+        metadata: {
+          frames,
+          processingStatus: 'frames_queued',
+          queuedAt: new Date().toISOString(),
+        },
       } as any,
     });
 
-    // Always generate a logical pack key (even if B2 not configured)
     const packKey = this.storage.evidencePackKey(companyId, evidence.id);
-
     const newStatus = this.storage.isConfigured() ? 'ready' : 'pending';
 
     evidence = await this.prisma.evidence.update({
       where: { id: evidence.id },
-      data: { packKey, status: newStatus } as any,
+      data: {
+        packKey,
+        status: newStatus,
+        metadata: {
+          frames,
+          processingStatus: this.storage.isConfigured() ? 'ready' : 'frames_queued',
+          packKey,
+        },
+      } as any,
     });
 
     return evidence;

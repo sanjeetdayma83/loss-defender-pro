@@ -22,3 +22,10 @@ frontend/build/
 # OS
 .DS_Store
 Thumbs.db
+
+*.bak
+*.tmp
+*.old
+schema.current*
+backend/coverage/
+

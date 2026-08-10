@@ -1,4 +1,4 @@
-﻿import {
+import {
   Injectable,
   NotFoundException,
   BadRequestException,
@@ -190,5 +190,53 @@ export class RecordingsService {
     } catch (_) {}
 
     return { recording: updated, evidence };
+  }
+  async pause(companyId: string, id: string) {
+    const rec = await this.prisma.recording.findFirst({ where: { id, companyId } });
+    if (!rec) throw new NotFoundException('Recording not found');
+    const s = String(rec.status);
+    if (!['started', 'recording', 'active'].includes(s)) {
+      throw new BadRequestException(`Cannot pause from ${s}`);
+    }
+    return this.prisma.recording.update({
+      where: { id },
+      data: { status: 'paused' as any },
+    });
+  }
+
+  async resume(companyId: string, id: string) {
+    const rec = await this.prisma.recording.findFirst({ where: { id, companyId } });
+    if (!rec) throw new NotFoundException('Recording not found');
+    if (String(rec.status) !== 'paused') {
+      throw new BadRequestException(`Cannot resume from ${rec.status}`);
+    }
+    return this.prisma.recording.update({
+      where: { id },
+      data: { status: 'started' as any },
+    });
+  }
+
+  async setChecksum(
+    companyId: string,
+    id: string,
+    dto: { checksum: string; algorithm?: string; segmentIndex?: number },
+  ) {
+    const rec = await this.prisma.recording.findFirst({ where: { id, companyId } });
+    if (!rec) throw new NotFoundException('Recording not found');
+    const meta = ((rec as any).metadata as any) || {};
+    const checksums = meta.checksums || [];
+    checksums.push({
+      segmentIndex: dto.segmentIndex ?? 0,
+      algorithm: dto.algorithm ?? 'sha256',
+      checksum: dto.checksum,
+      at: new Date().toISOString(),
+    });
+    return this.prisma.recording.update({
+      where: { id },
+      data: {
+        checksum: dto.checksum,
+        metadata: { ...meta, checksums },
+      } as any,
+    });
   }
 }
