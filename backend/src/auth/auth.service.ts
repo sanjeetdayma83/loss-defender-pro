@@ -177,6 +177,18 @@ export class AuthService {
 
   async refresh(dto: RefreshDto, ip?: string, ua?: string) {
     const tokenHash = this.hashToken(dto.refreshToken);
+
+    const reused = await this.prisma.refreshSession.findFirst({
+      where: { tokenHash, revokedAt: { not: null } },
+    });
+    if (reused) {
+      await this.prisma.refreshSession.updateMany({
+        where: { userId: reused.userId, revokedAt: null },
+        data: { revokedAt: new Date() },
+      });
+      throw new UnauthorizedException('Refresh token reuse detected');
+    }
+
     const session = await this.prisma.refreshSession.findFirst({
       where: { tokenHash, revokedAt: null },
       include: { user: true },

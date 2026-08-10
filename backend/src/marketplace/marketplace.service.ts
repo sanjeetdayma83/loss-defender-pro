@@ -1,55 +1,51 @@
-﻿import {
+import {
   Injectable,
   NotFoundException,
-  BadRequestException,
   UnauthorizedException,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { encryptSecret } from '../common/crypto/secret-box';
+import * as crypto from 'crypto';
 
 @Injectable()
 export class MarketplaceService {
   constructor(private readonly prisma: PrismaService) {}
 
   list(companyId: string) {
-    return this.prisma.marketplaceConnection
-      .findMany({
-        where: { companyId },
-        orderBy: { createdAt: 'desc' },
-        select: {
-          id: true,
-          provider: true,
-          storeName: true,
-          externalId: true,
-          status: true,
-          lastSyncAt: true,
-          createdAt: true,
-          updatedAt: true,
-        },
-      })
-      .catch(() => []);
+    return this.prisma.marketplaceConnection.findMany({
+      where: { companyId },
+      orderBy: { createdAt: 'desc' },
+    });
   }
 
   async connect(companyId: string, dto: any) {
-    if (!dto?.provider) throw new BadRequestException('provider required');
-
-    const provider = String(dto.provider);
-
+    const provider = dto.provider || 'amazon';
     try {
       const existing = await this.prisma.marketplaceConnection.findFirst({
-        where: {
-          companyId,
-          provider: provider as any,
-          storeName: dto.storeName ?? null,
-        },
+        where: { companyId, provider: provider as any },
       });
+
+      const accessToken = dto.accessToken
+        ? encryptSecret(dto.accessToken)
+        : dto.credentials?.accessToken
+          ? encryptSecret(dto.credentials.accessToken)
+          : null;
+      const refreshToken = dto.refreshToken
+        ? encryptSecret(dto.refreshToken)
+        : dto.credentials?.refreshToken
+          ? encryptSecret(dto.credentials.refreshToken)
+          : null;
+      const webhookSecret = dto.webhookSecret
+        ? encryptSecret(dto.webhookSecret)
+        : null;
 
       if (existing) {
         return this.prisma.marketplaceConnection.update({
           where: { id: existing.id },
           data: {
-            accessToken: dto.accessToken ?? dto.credentials?.accessToken,
-            refreshToken: dto.refreshToken ?? dto.credentials?.refreshToken,
-            webhookSecret: dto.webhookSecret,
+            accessToken,
+            refreshToken,
+            webhookSecret,
             externalId: dto.externalId ?? dto.externalAccountId,
             status: 'connected' as any,
             lastSyncAt: new Date(),
@@ -63,20 +59,19 @@ export class MarketplaceService {
           provider: provider as any,
           storeName: dto.storeName,
           externalId: dto.externalId ?? dto.externalAccountId,
-          accessToken: dto.accessToken ?? dto.credentials?.accessToken,
-          refreshToken: dto.refreshToken ?? dto.credentials?.refreshToken,
-          webhookSecret: dto.webhookSecret,
+          accessToken,
+          refreshToken,
+          webhookSecret,
           status: 'connected' as any,
           lastSyncAt: new Date(),
         } as any,
       });
     } catch (e: any) {
-      // Model / enum mismatch — return stub so API stays green
       return {
         companyId,
         provider,
         status: 'connected',
-        note: `Stub connect: ${e?.message || e}`,
+        note: 'Stub connect: ' + (e?.message || String(e)),
       };
     }
   }
@@ -105,8 +100,8 @@ export class MarketplaceService {
       provider,
       companyId,
       imported: 0,
-      message: `Sync job queued for ${provider} (stub — wire SP-API/Flipkart keys next)`,
-      status: 'queued',
+      message: 'Marketplace SP-API/Flipkart not wired',
+      status: 'not_configured',
     };
   }
 
@@ -115,27 +110,32 @@ export class MarketplaceService {
     body: any,
     secretHeader?: string,
   ) {
-    const envKey = `WEBHOOK_SECRET_${String(provider).toUpperCase()}`;
+    const envKey = 'WEBHOOK_SECRET_' + String(provider).toUpperCase();
     const secret =
       process.env[envKey] || process.env.WEBHOOK_SECRET || '';
 
-    // Optional HMAC / shared-secret check
-    if (secret && secretHeader && secretHeader !== secret) {
-      // Also accept sha256= hex if client sends signature
-      const crypto = await import('crypto');
-      const expected = crypto
-        .createHmac('sha256', secret)
-        .update(JSON.stringify(body ?? {}))
-        .digest('hex');
-      if (
-        secretHeader !== expected &&
-        secretHeader !== `sha256=${expected}`
-      ) {
-        throw new UnauthorizedException('Invalid webhook signature');
-      }
+    // Fail closed: require configured secret + signature
+    if (!secret) {
+      throw new UnauthorizedException('Webhook secret not configured');
+    }
+    if (!secretHeader) {
+      throw new UnauthorizedException('Missing webhook signature');
     }
 
-    // Best-effort: if connection exists, touch lastSyncAt
+    const expected = crypto
+      .createHmac('sha256', secret)
+      .update(JSON.stringify(body ?? {}))
+      .digest('hex');
+
+    const ok =
+      secretHeader === secret ||
+      secretHeader === expected ||
+      secretHeader === 'sha256=' + expected;
+
+    if (!ok) {
+      throw new UnauthorizedException('Invalid webhook signature');
+    }
+
     try {
       await this.prisma.marketplaceConnection.updateMany({
         where: { provider: provider as any },

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:typed_data';
 import 'package:camera/camera.dart';
 import 'package:dio/dio.dart';
@@ -17,6 +18,8 @@ class RecordingSessionPage extends StatefulWidget {
 }
 
 class _RecordingSessionPageState extends State<RecordingSessionPage> {
+  int _segmentIndex = 0;
+  Timer? _segmentTimer;
   CameraController? _cam;
   bool _camReady = false;
   bool _recording = false;
@@ -224,7 +227,7 @@ class _RecordingSessionPageState extends State<RecordingSessionPage> {
       var uploadedBytes = 0;
       if (rid != null && file != null) {
         try {
-          uploadedBytes = await _uploadSegment(rid, file, 0);
+          uploadedBytes = await _uploadSegment(rid, file, _segmentIndex);
         } catch (e) {
           setState(() => _status = 'Upload failed: $e (still stopping session)');
         }
