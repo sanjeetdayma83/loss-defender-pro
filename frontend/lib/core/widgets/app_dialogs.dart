@@ -50,6 +50,21 @@ class AppDialogs {
     return r == true;
   }
 
+  static Future<bool> confirm(
+    BuildContext context, {
+    String title = 'Confirm',
+    String message = 'Are you sure?',
+    String confirmText = 'Yes',
+    String cancelText = 'Cancel',
+  }) {
+    return confirmAction(
+      context,
+      title: title,
+      message: message,
+      confirmLabel: confirmText,
+    );
+  }
+
   // ─── 2. Delete Confirmation ─────────────────────────────────
   static Future<bool> confirmDelete(
     BuildContext context, {
