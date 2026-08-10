@@ -1,0 +1,92 @@
+name: P2 Go-Live Verification
+
+on:
+  pull_request:
+    branches: [main, master]
+  push:
+    branches: [main, master]
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    services:
+      redis:
+        image: redis:7-alpine
+        ports: ['6379:6379']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - name: Install
+        working-directory: backend
+        run: npm ci
+      - name: Prisma generate
+        working-directory: backend
+        run: npx prisma generate
+        env:
+          DATABASE_URL: postgresql://u:p@localhost:5432/db
+      - name: Unit tests
+        working-directory: backend
+        run: npm test -- --runInBand --passWithNoTests
+        env:
+          DATABASE_URL: postgresql://u:p@localhost:5432/db
+          JWT_ACCESS_SECRET: ci-test-access-secret-minimum-32-characters
+          JWT_REFRESH_SECRET: ci-test-refresh-secret-minimum-32-characters
+          MARKETPLACE_CREDENTIAL_KEY: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+          REDIS_HOST: 127.0.0.1
+          REDIS_PORT: 6379
+      - name: E2E smoke
+        working-directory: backend
+        run: npm run test:e2e -- --passWithNoTests
+        env:
+          DATABASE_URL: postgresql://u:p@localhost:5432/db
+          JWT_ACCESS_SECRET: ci-test-access-secret-minimum-32-characters
+          JWT_REFRESH_SECRET: ci-test-refresh-secret-minimum-32-characters
+          MARKETPLACE_CREDENTIAL_KEY: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+          REDIS_HOST: 127.0.0.1
+          REDIS_PORT: 6379
+      - name: Build
+        working-directory: backend
+        run: npm run build
+        env:
+          DATABASE_URL: postgresql://u:p@localhost:5432/db
+      - name: Docker build
+        working-directory: backend
+        run: docker build -t loss-defender-pro-backend:p2 .
+
+  frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.44.4'
+          channel: stable
+          cache: true
+      - name: Dependencies
+        working-directory: frontend
+        run: flutter pub get
+      - name: Analyze
+        working-directory: frontend
+        run: flutter analyze
+      - name: Tests
+        working-directory: frontend
+        run: flutter test
+      - name: Web release
+        working-directory: frontend
+        run: flutter build web --release
+      - name: Docker build
+        working-directory: frontend
+        run: docker build -t loss-defender-pro-frontend:p2 .
+
+  infrastructure:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate production compose
+        run: docker compose -f infra/docker-compose.prod.yml config
+      - name: Validate Nginx
+        run: docker run --rm -v "$PWD/infra/nginx/nginx.conf:/etc/nginx/conf.d/default.conf:ro" nginx:1.27-alpine nginx -t

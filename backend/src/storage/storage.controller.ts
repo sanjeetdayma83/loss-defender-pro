@@ -1,4 +1,4 @@
-﻿import { Controller, Get, Post, Body } from '@nestjs/common';
+import { Controller, Get, Post, Body, BadRequestException } from '@nestjs/common';
 import { StorageService } from './storage.service';
 import { CurrentUser, AuthenticatedUser } from '../common/decorators/current-user.decorator';
 import { IsString, IsOptional, IsInt, IsArray, ValidateNested, Min } from 'class-validator';
@@ -9,6 +9,10 @@ class PresignDto {
   @IsString() purpose: string;
   @IsOptional() @IsString() filename?: string;
   @IsOptional() @IsString() contentType?: string;
+}
+
+class SignedDownloadDto {
+  @IsString() key: string;
 }
 
 class InitMultipartDto {
@@ -56,31 +60,30 @@ export class StorageController {
 
   @Post('presign-upload')
   @ApiOperation({ summary: 'Simple single-part presigned PUT' })
-  async presignUpload(
-    @CurrentUser() u: AuthenticatedUser,
-    @Body() dto: PresignDto,
-  ) {
+  async presignUpload(@CurrentUser() u: AuthenticatedUser, @Body() dto: PresignDto) {
     const key = this.storage.buildKey(u.companyId, dto.purpose || 'misc', dto.filename);
     return this.storage.presignPut(key, dto.contentType || 'application/octet-stream');
   }
 
+  @Post('presign-download')
+  @ApiOperation({ summary: 'Tenant-scoped signed download URL (15 minute default TTL)' })
+  async presignDownload(@CurrentUser() u: AuthenticatedUser, @Body() dto: SignedDownloadDto) {
+    if (!dto.key.startsWith(`${u.companyId}/`)) {
+      throw new BadRequestException('Invalid storage key for tenant');
+    }
+    return this.storage.presignGet(dto.key, 900);
+  }
+
   @Post('multipart/init')
   @ApiOperation({ summary: 'Start resumable multipart upload' })
-  async initMultipart(
-    @CurrentUser() u: AuthenticatedUser,
-    @Body() dto: InitMultipartDto,
-  ) {
+  async initMultipart(@CurrentUser() u: AuthenticatedUser, @Body() dto: InitMultipartDto) {
     const key = this.storage.buildKey(u.companyId, dto.purpose || 'misc', dto.filename);
     return this.storage.initMultipart(key, dto.contentType || 'application/octet-stream');
   }
 
   @Post('multipart/presign-part')
   @ApiOperation({ summary: 'Get presigned URL for one part' })
-  async presignPart(
-    @CurrentUser() u: AuthenticatedUser,
-    @Body() dto: PresignPartDto,
-  ) {
-    // key must belong to this tenant (starts with companyId/)
+  async presignPart(@CurrentUser() u: AuthenticatedUser, @Body() dto: PresignPartDto) {
     if (!dto.key.startsWith(u.companyId + '/')) {
       return { configured: false, error: 'Invalid key for tenant' };
     }
@@ -89,10 +92,7 @@ export class StorageController {
 
   @Post('multipart/complete')
   @ApiOperation({ summary: 'Complete multipart upload' })
-  async completeMultipart(
-    @CurrentUser() u: AuthenticatedUser,
-    @Body() dto: CompleteMultipartDto,
-  ) {
+  async completeMultipart(@CurrentUser() u: AuthenticatedUser, @Body() dto: CompleteMultipartDto) {
     if (!dto.key.startsWith(u.companyId + '/')) {
       return { configured: false, error: 'Invalid key for tenant' };
     }
@@ -101,10 +101,7 @@ export class StorageController {
 
   @Post('multipart/abort')
   @ApiOperation({ summary: 'Abort multipart upload' })
-  async abortMultipart(
-    @CurrentUser() u: AuthenticatedUser,
-    @Body() dto: AbortMultipartDto,
-  ) {
+  async abortMultipart(@CurrentUser() u: AuthenticatedUser, @Body() dto: AbortMultipartDto) {
     if (!dto.key.startsWith(u.companyId + '/')) {
       return { configured: false, error: 'Invalid key for tenant' };
     }
