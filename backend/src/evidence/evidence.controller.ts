@@ -1,4 +1,4 @@
-﻿import { Controller, Get, Post, Param, Body } from '@nestjs/common';
+import { Controller, Get, Post, Param, Body } from '@nestjs/common';
 import { EvidenceService } from './evidence.service';
 import { CurrentUser, AuthenticatedUser } from '../common/decorators/current-user.decorator';
 import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
@@ -31,5 +31,14 @@ export class EvidenceController {
     @Body() body: ExtractFramesDto,
   ) {
     return this.evidence.processLocalVideo(u.companyId, id, body.videoPath);
+  }
+
+  @Post(':id/process-b2')
+  async processB2(
+    @CurrentUser() u: AuthenticatedUser,
+    @Param('id') id: string,
+    @Body() body: { b2Key: string },
+  ) {
+    return this.evidence.processFromB2Key(u.companyId, id, body.b2Key);
   }
 }

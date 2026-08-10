@@ -119,4 +119,18 @@ export class EvidenceService {
       throw new InternalServerErrorException(e?.message || 'FFmpeg frame extraction failed');
     }
   }
+
+  async processFromB2Key(companyId: string, evidenceId: string, b2Key: string) {
+    const buf = await this.storage.getObjectBuffer(b2Key);
+    if (!buf || !buf.length) {
+      throw new NotFoundException(`B2 object missing or empty: ${b2Key}`);
+    }
+    const tmp = path.join(os.tmpdir(), `ldp-vid-${evidenceId}.webm`);
+    fs.writeFileSync(tmp, buf);
+    try {
+      return await this.extractFramesFromFile(companyId, evidenceId, tmp);
+    } finally {
+      try { fs.unlinkSync(tmp); } catch (_) {}
+    }
+  }
 }

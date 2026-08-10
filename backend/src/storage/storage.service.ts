@@ -201,4 +201,24 @@ export class StorageService {
     const out = await this.client.send(cmd);
     return { configured: true, key, etag: out.ETag ?? null };
   }
+
+  async getObjectBuffer(key: string): Promise<Buffer | null> {
+    if (!this.configured || !(this as any).client || !(this as any).bucket) return null;
+    try {
+      const { GetObjectCommand } = await import('@aws-sdk/client-s3');
+      const out = await (this as any).client.send(
+        new GetObjectCommand({ Bucket: (this as any).bucket, Key: key }),
+      );
+      const stream = out.Body as any;
+      if (!stream) return null;
+      const chunks: Buffer[] = [];
+      for await (const chunk of stream) {
+        chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+      }
+      return Buffer.concat(chunks);
+    } catch (e: any) {
+      console.error('getObjectBuffer', e?.message);
+      return null;
+    }
+  }
 }

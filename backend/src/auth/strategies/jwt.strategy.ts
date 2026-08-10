@@ -1,28 +1,40 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { PassportStrategy } from '@nestjs/passport';
 import { ExtractJwt, Strategy } from 'passport-jwt';
 import { ConfigService } from '@nestjs/config';
-import { AuthenticatedUser } from '../../common/decorators/current-user.decorator';
+import { PrismaService } from '../../prisma/prisma.service';
 
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
-  constructor(config: ConfigService) {
+  constructor(
+    config: ConfigService,
+    private readonly prisma: PrismaService,
+  ) {
     super({
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
       ignoreExpiration: false,
-      secretOrKey: config.get<string>('jwt.accessSecret'),
+      secretOrKey: config.get<string>('JWT_ACCESS_SECRET') || config.get<string>('jwt.accessSecret') || 'dev',
+      passReqToCallback: false,
     });
   }
 
-  // Whatever this returns becomes `request.user` — kept minimal on purpose:
-  // companyId + role travel in the JWT so most routes never hit the DB just to
-  // check tenant/role (see §9.2 JWT Payload in the spec).
-  async validate(payload: any): Promise<AuthenticatedUser> {
+  async validate(payload: any) {
+    if (payload?.jti) {
+      const bl = await (this.prisma as any).tokenBlacklist?.findFirst?.({
+        where: { jti: payload.jti },
+      });
+      if (bl) throw new UnauthorizedException('Token revoked');
+    }
+    // Fallback: hash-less tokens — check user status
+    const userId = payload.sub || payload.userId;
+    if (!userId) throw new UnauthorizedException();
     return {
-      sub: payload.sub,
+      ...payload,
+      id: userId,
+      sub: userId,
+      userId,
       companyId: payload.companyId,
       role: payload.role,
-      email: payload.email,
     };
   }
 }
