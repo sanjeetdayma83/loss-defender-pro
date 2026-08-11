@@ -9,7 +9,6 @@ module.exports = {
       'ts-jest',
       {
         tsconfig: 'tsconfig.e2e.json',
-        isolatedModules: true,
         diagnostics: { warnOnly: true },
       },
     ],
