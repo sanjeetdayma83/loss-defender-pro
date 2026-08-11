@@ -1,3 +1,4 @@
+import { SupportModule } from './support/support.module';
 import { RbacModule } from './common/rbac/rbac.module';
 import { BillingModule } from './billing/billing.module';
 import { AnalyticsModule } from './analytics/analytics.module';
@@ -50,7 +51,7 @@ import { RealtimeModule } from './realtime/realtime.module';
     ReturnsModule,
     ScannerModule,
     AlertsModule,
-    MarketplaceModule, AnalyticsModule, BillingModule,
+    MarketplaceModule, AnalyticsModule, BillingModule, SupportModule,
     NotificationsModule,
   ],
   

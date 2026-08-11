@@ -1,3 +1,4 @@
+import '../../features/support/presentation/support_screen.dart';
 import '../../features/admin/presentation/owner_control_screen.dart';
 import '../../features/billing/presentation/billing_screen.dart';
 import '../../features/auth/presentation/sessions_screen.dart';
@@ -55,6 +56,7 @@ final appRouter = GoRouter(
         GoRoute(path: '/alerts', builder: (_, __) => const AlertsScreen()),
         GoRoute(path: '/admin', builder: (_, __) => const OwnerControlScreen()),
         GoRoute(path: '/billing', builder: (_, __) => const BillingScreen()),
+        GoRoute(path: '/support', builder: (_, __) => const SupportScreen()),
         GoRoute(path: '/settings', builder: (_, __) => const SettingsScreen()),
         GoRoute(path: '/sessions', builder: (_, __) => const SessionsScreen()),
       ],
