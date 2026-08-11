@@ -1,26 +1,53 @@
-﻿import { Injectable, NestInterceptor, ExecutionContext, CallHandler } from '@nestjs/common';
+import { Injectable, NestInterceptor, ExecutionContext, CallHandler } from '@nestjs/common';
 import { Observable } from 'rxjs';
 import { map } from 'rxjs/operators';
 
 const SENSITIVE = [
-  'tempPassword', 'temporaryPassword', 'devCode',
-  'password', 'passwordHash', 'accessToken_raw',
+  'password',
+  'passwordHash',
+  'tempPassword',
+  'temporaryPassword',
+  'devCode',
+  'inviteToken',
+  'refreshToken',
+  'secret',
+  'webhookSecret',
+  'accessToken_raw',
 ];
 
-function strip(obj: any): any {
+function strip(obj: any, allowDevSecrets: boolean): any {
   if (obj == null || typeof obj !== 'object') return obj;
-  if (Array.isArray(obj)) return obj.map(strip);
+  if (Array.isArray(obj)) return obj.map((v) => strip(v, allowDevSecrets));
   const out: any = {};
   for (const [k, v] of Object.entries(obj)) {
-    if (process.env.NODE_ENV === 'production' && SENSITIVE.includes(k)) continue;
-    out[k] = strip(v);
+    const lower = k.toLowerCase();
+    const isDevSecret = ['devcode', 'temppassword', 'temporarypassword', 'invitetoken'].includes(lower);
+    if (SENSITIVE.some((field) => field.toLowerCase() === lower)) {
+      if (isDevSecret && allowDevSecrets) out[k] = strip(v, allowDevSecrets);
+      continue;
+    }
+    out[k] = strip(v, allowDevSecrets);
   }
   return out;
 }
 
 @Injectable()
 export class SanitizeInterceptor implements NestInterceptor {
-  intercept(_ctx: ExecutionContext, next: CallHandler): Observable<any> {
-    return next.handle().pipe(map((data) => strip(data)));
+  intercept(context: ExecutionContext, next: CallHandler): Observable<any> {
+    const req = context.switchToHttp().getRequest();
+    const path = String(req?.url ?? '');
+    const isAuthTokenRoute = /\/auth\/(login|refresh)/i.test(path);
+    const allowDevSecrets =
+      process.env.ALLOW_DEV_SECRETS === 'true' &&
+      process.env.NODE_ENV !== 'production';
+
+    return next.handle().pipe(
+      map((data) => {
+        if (isAuthTokenRoute) {
+          return strip(data, allowDevSecrets);
+        }
+        return strip(data, allowDevSecrets);
+      }),
+    );
   }
 }
