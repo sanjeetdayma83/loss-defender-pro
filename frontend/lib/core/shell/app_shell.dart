@@ -159,9 +159,13 @@ class _AppShellState extends State<AppShell> {
         _company?['companyName']?.toString() ?? 'Company';
     final userName = _user?['name']?.toString() ?? 'User';
     final userRole = _user?['role']?.toString() ?? '';
+    final isOwner = ['owner', 'super_admin', 'admin', 'manager'].contains(userRole);
+    final navItems = isOwner
+        ? _nav
+        : _nav.where((n) => n.path != '/users').toList();
 
     final sidebar = _Sidebar(
-      items: _nav,
+      items: navItems,
       selected: _selected,
       onTap: (path) {
         if (!isWide) Navigator.pop(context);

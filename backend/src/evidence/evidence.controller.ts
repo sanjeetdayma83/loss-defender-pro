@@ -2,10 +2,13 @@
 import { EvidenceService } from './evidence.service';
 import { CurrentUser, AuthenticatedUser } from '../common/decorators/current-user.decorator';
 import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
-import { IsString } from 'class-validator';
+import { IsString, IsOptional, IsInt, Min, Max } from 'class-validator';
+import { Type } from 'class-transformer';
 
-class ExtractFramesDto {
-  @IsString() videoPath: string;
+class ProcessEvidenceDto {
+  @IsString() recordingId: string;
+  @IsOptional() @Type(() => Number) @IsInt() @Min(1) @Max(30)
+  maxFramesPerSegment?: number;
 }
 
 @ApiTags('evidence')
@@ -29,12 +32,18 @@ export class EvidenceController {
     return this.evidence.getOne(u.companyId, id);
   }
 
-  @Post(':id/extract-frames')
-  extractFrames(
+  /** Process frames from B2-registered recording segments (production path). */
+  @Post(':id/process')
+  process(
     @CurrentUser() u: AuthenticatedUser,
     @Param('id') id: string,
-    @Body() body: ExtractFramesDto,
+    @Body() body: ProcessEvidenceDto,
   ) {
-    return this.evidence.processLocalVideo(u.companyId, id, body.videoPath);
+    return this.evidence.processRecordingEvidence(
+      u.companyId,
+      body.recordingId,
+      id,
+      body.maxFramesPerSegment ?? 8,
+    );
   }
 }

@@ -313,7 +313,7 @@ class _RecordingSessionPageState extends State<RecordingSessionPage> {
         setState(() => _status = 'Finalizing…');
         await ApiClient.instance.dio.post('/recordings/$rid/stop', data: {
           'durationSec': _elapsed.inSeconds,
-          'segmentCount': uploadedBytes > 0 ? 1 : 0,
+          'segmentCount': (_segmentIndex + (uploadedBytes > 0 ? 1 : 0)).clamp(0, 999),
         });
       }
       if (!mounted) return;
