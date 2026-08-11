@@ -1,4 +1,4 @@
-﻿import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 
 export interface AuditLogPayload {
@@ -16,6 +16,36 @@ export interface AuditLogPayload {
   [key: string]: any;
 }
 
+const SENSITIVE_KEYS = new Set([
+  'password',
+  'passwordhash',
+  'currentpassword',
+  'newpassword',
+  'temppassword',
+  'temporarypassword',
+  'devcode',
+  'invitetoken',
+  'refreshtoken',
+  'accesstoken',
+  'secret',
+  'webhooksecret',
+  'clientsecret',
+  'apisecret',
+  'awssecretaccesskey',
+]);
+
+function redact(value: any, depth = 0): any {
+  if (depth > 8 || value == null) return value;
+  if (Array.isArray(value)) return value.map((item) => redact(item, depth + 1));
+  if (typeof value !== 'object') return value;
+  const out: any = {};
+  for (const [key, val] of Object.entries(value)) {
+    if (SENSITIVE_KEYS.has(key.toLowerCase())) continue;
+    out[key] = redact(val, depth + 1);
+  }
+  return out;
+}
+
 @Injectable()
 export class AuditService {
   private readonly logger = new Logger(AuditService.name);
@@ -31,8 +61,8 @@ export class AuditService {
           action: payload.action,
           entity: payload.entity,
           entityId: payload.entityId ?? null,
-          before: payload.before ?? null,
-          after: payload.after ?? payload.meta ?? null,
+          before: redact(payload.before ?? null),
+          after: redact(payload.after ?? payload.meta ?? null),
           ipAddress: payload.ipAddress || payload.ip || null,
         },
       });
