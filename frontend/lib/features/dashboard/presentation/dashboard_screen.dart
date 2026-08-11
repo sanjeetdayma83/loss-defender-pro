@@ -1,7 +1,9 @@
-﻿import 'package:dio/dio.dart';
+import 'package:dio/dio.dart';
+import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import '../../../core/network/api_client.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/widgets/ui_kit.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -10,10 +12,11 @@ class DashboardScreen extends StatefulWidget {
 }
 
 class _DashboardScreenState extends State<DashboardScreen> {
-  Map<String, dynamic>? _kpis;
+  Map<String, dynamic> _kpis = {};
   List<dynamic> _orders = [];
   List<dynamic> _alerts = [];
-  Map<String, dynamic>? _live;
+  List<dynamic> _warehouses = [];
+  Map<String, dynamic> _live = {};
   bool _loading = true;
   String? _error;
 
@@ -23,33 +26,43 @@ class _DashboardScreenState extends State<DashboardScreen> {
     _load();
   }
 
+  Map<String, dynamic> _map(dynamic res) {
+    final b = res is Response ? res.data : res;
+    if (b is Map && b['data'] is Map) return Map<String, dynamic>.from(b['data'] as Map);
+    if (b is Map) return Map<String, dynamic>.from(b);
+    return {};
+  }
+
+  List<dynamic> _list(dynamic res) {
+    final b = res is Response ? res.data : res;
+    final d = b is Map && b['data'] != null ? b['data'] : b;
+    if (d is List) return d;
+    if (d is Map && d['data'] is List) return d['data'] as List;
+    return [];
+  }
+
   Future<void> _load() async {
-    setState(() { _loading = true; _error = null; });
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
     try {
       final dio = ApiClient.instance.dio;
+      final empty = Response(requestOptions: RequestOptions(path: ''), data: {'data': {}});
+      final emptyList = Response(requestOptions: RequestOptions(path: ''), data: {'data': []});
       final results = await Future.wait([
-        dio.get('/analytics/kpis').catchError((_) => Response(requestOptions: RequestOptions(path: ''), data: {'data': {}})),
-        dio.get('/orders'),
-        dio.get('/alerts').catchError((_) => Response(requestOptions: RequestOptions(path: ''), data: {'data': []})),
-        dio.get('/supervisor/live').catchError((_) => Response(requestOptions: RequestOptions(path: ''), data: {'data': {}})),
+        dio.get('/analytics/kpis').catchError((_) => empty),
+        dio.get('/orders').catchError((_) => emptyList),
+        dio.get('/alerts').catchError((_) => emptyList),
+        dio.get('/supervisor/live').catchError((_) => empty),
+        dio.get('/warehouses').catchError((_) => emptyList),
       ]);
-      Map<String, dynamic> unwrap(dynamic res) {
-        final b = res.data;
-        if (b is Map && b['data'] != null) {
-          if (b['data'] is Map) return Map<String, dynamic>.from(b['data'] as Map);
-        }
-        return b is Map ? Map<String, dynamic>.from(b) : {};
-      }
-      List listUnwrap(dynamic res) {
-        final b = res.data;
-        final d = b is Map && b['data'] != null ? b['data'] : b;
-        return d is List ? d : [];
-      }
       setState(() {
-        _kpis = unwrap(results[0]);
-        _orders = listUnwrap(results[1]);
-        _alerts = listUnwrap(results[2]);
-        _live = unwrap(results[3]);
+        _kpis = _map(results[0]);
+        _orders = _list(results[1]);
+        _alerts = _list(results[2]);
+        _live = _map(results[3]);
+        _warehouses = _list(results[4]);
         _loading = false;
       });
     } on DioException catch (e) {
@@ -61,39 +74,36 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   int _countStatus(String s) =>
-      _orders.where((o) => (o is Map ? o['status'] : '') == s).length;
-
-  Widget _kpi(String label, String value, IconData icon, Color color) {
-    return Expanded(
-      child: Card(
-        child: Padding(
-          padding: const EdgeInsets.all(14),
-          child: Row(
-            children: [
-              CircleAvatar(backgroundColor: color.withOpacity(0.12), child: Icon(icon, color: color, size: 20)),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(label, style: const TextStyle(fontSize: 11, color: AppColors.textSecondary)),
-                    Text(value, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
+      _orders.where((o) => (o is Map ? '${o['status']}' : '') == s).length;
 
   @override
   Widget build(BuildContext context) {
-    final total = _kpis?['ordersTotal'] ?? _orders.length;
-    final evidence = _kpis?['evidence'] ?? 0;
-    final dispatched = _kpis?['ordersDispatched'] ?? _countStatus('dispatched');
-    final packing = (_live?['packingOrders'] ?? _countStatus('packing')).toString();
+    if (_loading) return const Center(child: CircularProgressIndicator());
+    if (_error != null) {
+      return Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(_error!, style: const TextStyle(color: Colors.red)),
+            TextButton(onPressed: _load, child: const Text('Retry')),
+          ],
+        ),
+      );
+    }
+
+    final ordersToday = '${_kpis['ordersToday'] ?? _kpis['orders_today'] ?? _orders.length}';
+    final pipeline = '${_kpis['pipeline'] ?? _countStatus('packing') + _countStatus('recording')}';
+    final stations = '${_live['stations'] ?? _warehouses.length}';
+    final alertN = '${_alerts.length}';
+
+    final pipelineSteps = [
+      'queued',
+      'packing',
+      'recording',
+      'evidence_ready',
+      'dispatched',
+      'shipped',
+    ];
 
     return RefreshIndicator(
       onRefresh: _load,
@@ -107,85 +117,126 @@ class _DashboardScreenState extends State<DashboardScreen> {
               IconButton(onPressed: _load, icon: const Icon(Icons.refresh)),
             ],
           ),
-          if (_loading) const LinearProgressIndicator(),
-          if (_error != null) Text(_error!, style: const TextStyle(color: Colors.red)),
           const SizedBox(height: 12),
-          LayoutBuilder(builder: (context, c) {
-            final wide = c.maxWidth > 700;
-            final row1 = Row(children: [
-              _kpi('Orders', '$total', Icons.shopping_bag_outlined, AppColors.accent),
-              const SizedBox(width: 8),
-              _kpi('Evidence', '$evidence', Icons.photo_library_outlined, Colors.teal),
-              const SizedBox(width: 8),
-              _kpi('Dispatched', '$dispatched', Icons.local_shipping_outlined, Colors.indigo),
-              if (wide) ...[
-                const SizedBox(width: 8),
-                _kpi('Packing live', packing, Icons.inventory_2_outlined, Colors.orange),
-              ],
-            ]);
-            return row1;
-          }),
-          const SizedBox(height: 16),
-          const Text('Orders pipeline', style: TextStyle(fontWeight: FontWeight.w600)),
-          const SizedBox(height: 8),
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Wrap(
-                spacing: 12,
-                runSpacing: 8,
-                children: [
-                  for (final e in [
-                    ['packing', _countStatus('packing')],
-                    ['recording', _countStatus('recording')],
-                    ['scanned', _countStatus('scanned')],
-                    ['evidence_ready', _countStatus('evidence_ready')],
-                    ['dispatched', _countStatus('dispatched')],
-                  ])
-                    Chip(label: Text('${e[0]}: ${e[1]}')),
-                ],
-              ),
+          KpiStrip(items: [
+            KpiItem('Orders today', ordersToday, hint: 'live'),
+            KpiItem('In pipeline', pipeline),
+            KpiItem('Stations', stations, hint: 'active'),
+            KpiItem('Alerts', alertN, hintColor: Colors.orange),
+          ]),
+          const SizedBox(height: 12),
+          SectionCard(
+            title: 'Order pipeline',
+            child: Row(
+              children: pipelineSteps
+                  .map(
+                    (s) => Expanded(
+                      child: Column(
+                        children: [
+                          CircleAvatar(
+                            radius: 18,
+                            backgroundColor: AppColors.accent.withOpacity(0.12),
+                            child: Text(
+                              '${_countStatus(s)}',
+                              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            s.replaceAll('_', '\n'),
+                            textAlign: TextAlign.center,
+                            style: const TextStyle(fontSize: 9, color: AppColors.textSecondary),
+                          ),
+                        ],
+                      ),
+                    ),
+                  )
+                  .toList(),
             ),
           ),
-          const SizedBox(height: 16),
-          const Text('Live floor', style: TextStyle(fontWeight: FontWeight.w600)),
-          const SizedBox(height: 8),
-          Card(
-            child: ListTile(
-              leading: const Icon(Icons.videocam_outlined),
-              title: Text('Active recordings: ${_live?['activeRecordings'] ?? 0}'),
-              subtitle: Text('Packing orders: ${_live?['packingOrders'] ?? 0}'),
-            ),
-          ),
-          const SizedBox(height: 16),
-          const Text('Alerts', style: TextStyle(fontWeight: FontWeight.w600)),
-          const SizedBox(height: 8),
-          if (_alerts.isEmpty)
-            const Card(child: ListTile(title: Text('No alerts')))
-          else
-            ..._alerts.take(5).map((a) {
-              final m = a is Map ? Map<String, dynamic>.from(a as Map) : <String, dynamic>{};
-              return Card(
-                child: ListTile(
-                  leading: const Icon(Icons.notification_important_outlined, color: Colors.orange),
-                  title: Text(m['title']?.toString() ?? m['type']?.toString() ?? 'Alert'),
-                  subtitle: Text(m['message']?.toString() ?? m['body']?.toString() ?? ''),
+          SectionCard(
+            title: '7-day trend',
+            child: SizedBox(
+              height: 160,
+              child: LineChart(
+                LineChartData(
+                  gridData: const FlGridData(show: false),
+                  titlesData: const FlTitlesData(show: false),
+                  borderData: FlBorderData(show: false),
+                  lineBarsData: [
+                    LineChartBarData(
+                      spots: List.generate(7, (i) {
+                        final t = _kpis['trend'];
+                        double y = (i + 1).toDouble();
+                        if (t is List && t.length > i) {
+                          final v = t[i];
+                          if (v is num) y = v.toDouble();
+                          if (v is Map && v['count'] is num) y = (v['count'] as num).toDouble();
+                        }
+                        return FlSpot(i.toDouble(), y);
+                      }),
+                      isCurved: true,
+                      barWidth: 3,
+                      color: AppColors.accent,
+                      dotData: const FlDotData(show: false),
+                      belowBarData: BarAreaData(show: true, color: AppColors.accent.withOpacity(0.08)),
+                    ),
+                  ],
                 ),
-              );
-            }),
-          const SizedBox(height: 16),
-          const Text('Recent orders', style: TextStyle(fontWeight: FontWeight.w600)),
-          const SizedBox(height: 8),
-          ..._orders.take(8).map((o) {
-            final m = o is Map ? Map<String, dynamic>.from(o as Map) : <String, dynamic>{};
-            return Card(
-              child: ListTile(
-                title: Text(m['marketplaceOrderId']?.toString() ?? m['id']?.toString() ?? '—'),
-                subtitle: Text('${m['customerName'] ?? ''} · ${m['status'] ?? ''}'),
-                dense: true,
               ),
-            );
-          }),
+            ),
+          ),
+          SectionCard(
+            title: 'Stations / warehouses',
+            child: _warehouses.isEmpty
+                ? const EmptyHint('No warehouses yet')
+                : Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: _warehouses.map((w) {
+                      final m = w is Map ? w : <String, dynamic>{};
+                      return Chip(
+                        avatar: const Icon(Icons.warehouse_outlined, size: 16),
+                        label: Text('${m['name'] ?? m['code'] ?? 'WH'} · ${m['status'] ?? 'active'}'),
+                      );
+                    }).toList(),
+                  ),
+          ),
+          SectionCard(
+            title: 'AI / rule alerts',
+            child: _alerts.isEmpty
+                ? const EmptyHint('No open alerts')
+                : Column(
+                    children: _alerts.take(6).map((a) {
+                      final m = a is Map ? a : {'message': '$a'};
+                      return ListTile(
+                        dense: true,
+                        leading: const Icon(Icons.warning_amber, color: Colors.orange),
+                        title: Text('${m['message'] ?? m['type'] ?? m}'),
+                        subtitle: Text('${m['severity'] ?? m['type'] ?? ''}'),
+                      );
+                    }).toList(),
+                  ),
+          ),
+          SectionCard(
+            title: 'Recent orders',
+            child: _orders.isEmpty
+                ? const EmptyHint('No orders')
+                : Column(
+                    children: _orders.take(8).map((o) {
+                      final m = o is Map ? o : <String, dynamic>{};
+                      return ListTile(
+                        dense: true,
+                        leading: CircleAvatar(
+                          radius: 14,
+                          child: Text('${(m['marketplaceOrderId'] ?? m['id'] ?? '?')}'[0].toUpperCase()),
+                        ),
+                        title: Text('${m['marketplaceOrderId'] ?? m['id'] ?? ''}'),
+                        trailing: StatusPill('${m['status'] ?? ''}', AppColors.accent),
+                      );
+                    }).toList(),
+                  ),
+          ),
         ],
       ),
     );

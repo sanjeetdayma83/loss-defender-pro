@@ -1,7 +1,8 @@
-﻿import 'package:dio/dio.dart';
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import '../../../core/network/api_client.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/widgets/ui_kit.dart';
 import 'evidence_detail_page.dart';
 
 class EvidenceScreen extends StatefulWidget {
@@ -11,7 +12,7 @@ class EvidenceScreen extends StatefulWidget {
 }
 
 class _EvidenceScreenState extends State<EvidenceScreen> {
-  List<Map<String, dynamic>> _items = [];
+  List<dynamic> _items = [];
   bool _loading = true;
   String? _error;
 
@@ -22,103 +23,131 @@ class _EvidenceScreenState extends State<EvidenceScreen> {
   }
 
   Future<void> _load() async {
-    setState(() { _loading = true; _error = null; });
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
     try {
       final res = await ApiClient.instance.dio.get('/evidence');
-      final d = res.data is Map && res.data['data'] != null ? res.data['data'] : res.data;
+      final b = res.data;
+      final d = b is Map && b['data'] != null ? b['data'] : b;
       setState(() {
-        _items = (d is List ? d : [])
-            .whereType<Map>()
-            .map((e) => Map<String, dynamic>.from(e))
-            .toList();
+        _items = d is List ? d : [];
         _loading = false;
       });
     } on DioException catch (e) {
       setState(() {
-        _error = e.response?.data?['message']?.toString() ?? e.message;
+        _error = e.message;
         _loading = false;
       });
     }
   }
 
-  void _open(String id) {
-    Navigator.of(context).push(MaterialPageRoute(
-      builder: (_) => EvidenceDetailPage(evidenceId: id),
-    ));
+  Future<void> _openDetail(Map e) async {
+    final id = '${e['id']}';
+    if (id.isEmpty) return;
+    try {
+      final res = await ApiClient.instance.dio.get('/evidence/$id');
+      final b = res.data;
+      final detail = b is Map && b['data'] is Map
+          ? Map<String, dynamic>.from(b['data'] as Map)
+          : Map<String, dynamic>.from(e);
+      if (!mounted) return;
+      await Navigator.of(context).push(
+        MaterialPageRoute(builder: (_) => EvidenceDetailPage(evidenceId: id)),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      await Navigator.of(context).push(
+        MaterialPageRoute(builder: (_) => EvidenceDetailPage(evidenceId: id)),
+      );
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Row(
-            children: [
-              const Text('Evidence', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
-              const Spacer(),
-              Text('Total ${_items.length}', style: const TextStyle(color: AppColors.textSecondary)),
-              IconButton(onPressed: _load, icon: const Icon(Icons.refresh)),
-            ],
+    if (_loading) return const Center(child: CircularProgressIndicator());
+    if (_error != null) {
+      return Center(child: TextButton(onPressed: _load, child: Text('Retry: $_error')));
+    }
+
+    return RefreshIndicator(
+      onRefresh: _load,
+      child: CustomScrollView(
+        slivers: [
+          SliverPadding(
+            padding: const EdgeInsets.all(16),
+            sliver: SliverToBoxAdapter(
+              child: Row(
+                children: [
+                  const Text('Evidence', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+                  const Spacer(),
+                  Text('${_items.length} packs', style: const TextStyle(color: AppColors.textSecondary)),
+                  IconButton(onPressed: _load, icon: const Icon(Icons.refresh)),
+                ],
+              ),
+            ),
           ),
-          if (_loading) const LinearProgressIndicator(),
-          if (_error != null) Text(_error!, style: const TextStyle(color: Colors.red)),
-          const SizedBox(height: 12),
-          Expanded(
-            child: _items.isEmpty && !_loading
-                ? const Center(child: Text('No evidence yet — complete a recording'))
-                : GridView.builder(
-                    gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-                      maxCrossAxisExtent: 280,
-                      mainAxisSpacing: 12,
-                      crossAxisSpacing: 12,
-                      childAspectRatio: 1.15,
-                    ),
-                    itemCount: _items.length,
-                    itemBuilder: (_, i) {
-                      final e = _items[i];
-                      final id = e['id']?.toString() ?? '';
-                      final status = e['status']?.toString() ?? '—';
-                      return Card(
-                        clipBehavior: Clip.antiAlias,
-                        child: InkWell(
-                          onTap: id.isEmpty ? null : () => _open(id),
-                          child: Padding(
-                            padding: const EdgeInsets.all(12),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Container(
-                                  height: 72,
-                                  width: double.infinity,
-                                  decoration: BoxDecoration(
-                                    color: AppColors.accent.withOpacity(0.08),
-                                    borderRadius: BorderRadius.circular(8),
-                                  ),
-                                  child: const Icon(Icons.videocam_outlined, size: 36),
-                                ),
-                                const SizedBox(height: 8),
-                                Text(id.length > 12 ? '${id.substring(0, 8)}…' : id,
-                                    style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
-                                Text('Status: $status · frames ${e['frameCount'] ?? 0}',
-                                    style: const TextStyle(fontSize: 11, color: AppColors.textSecondary)),
-                                const Spacer(),
-                                Align(
-                                  alignment: Alignment.centerRight,
-                                  child: TextButton(onPressed: () => _open(id), child: const Text('Open')),
-                                ),
-                              ],
+          if (_items.isEmpty)
+            const SliverToBoxAdapter(child: EmptyHint('No evidence packs yet — finish a recording'))
+          else
+            SliverPadding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              sliver: SliverGrid(
+                gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+                  maxCrossAxisExtent: 220,
+                  childAspectRatio: 0.85,
+                  crossAxisSpacing: 10,
+                  mainAxisSpacing: 10,
+                ),
+                delegate: SliverChildBuilderDelegate(
+                  (context, i) {
+                    final raw = _items[i];
+                    final e = raw is Map ? Map<String, dynamic>.from(raw) : <String, dynamic>{};
+                    final id = '${e['id'] ?? ''}';
+                    final short = id.length > 8 ? id.substring(0, 8) : id;
+                    return Card(
+                      clipBehavior: Clip.antiAlias,
+                      child: InkWell(
+                        onTap: () => _openDetail(e),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            Expanded(
+                              child: Container(
+                                color: const Color(0xFF0F172A),
+                                child: const Icon(Icons.movie_creation_outlined, color: Colors.white54, size: 42),
+                              ),
                             ),
-                          ),
+                            Padding(
+                              padding: const EdgeInsets.all(10),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(short, style: const TextStyle(fontWeight: FontWeight.w700)),
+                                  const SizedBox(height: 4),
+                                  Row(
+                                    children: [
+                                      StatusPill('${e['status'] ?? '—'}', AppColors.accent),
+                                      const Spacer(),
+                                      Text('${e['frameCount'] ?? 0} f',
+                                          style: const TextStyle(fontSize: 11, color: AppColors.textSecondary)),
+                                    ],
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
                         ),
-                      );
-                    },
-                  ),
-          ),
+                      ),
+                    );
+                  },
+                  childCount: _items.length,
+                ),
+              ),
+            ),
         ],
       ),
     );
   }
 }
-
