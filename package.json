@@ -9,6 +9,7 @@
     "dev:backend": "npm run start:dev --workspace=backend"
   },
   "dependencies": {
+    "bcrypt": "^5.1.1",
     "bcryptjs": "^3.0.3",
     "rxjs": "^7.8.2"
   }

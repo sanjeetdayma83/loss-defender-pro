@@ -17,6 +17,8 @@ import '../../features/returns/presentation/returns_screen.dart';
 import '../../features/evidence/presentation/evidence_screen.dart';
 import '../../features/claims/presentation/claims_screen.dart';
 import '../../features/settings/presentation/settings_screen.dart';
+import '../../features/marketplace/presentation/marketplace_screen.dart';
+import '../../features/alerts/presentation/alerts_screen.dart';
 
 final appRouter = GoRouter(
   initialLocation: '/dashboard',
@@ -47,6 +49,8 @@ final appRouter = GoRouter(
         GoRoute(path: '/returns', builder: (_, __) => const ReturnsScreen()),
         GoRoute(path: '/evidence', builder: (_, __) => const EvidenceScreen()),
         GoRoute(path: '/claims', builder: (_, __) => const ClaimsScreen()),
+        GoRoute(path: '/marketplace', builder: (_, __) => const MarketplaceScreen()),
+        GoRoute(path: '/alerts', builder: (_, __) => const AlertsScreen()),
         GoRoute(path: '/settings', builder: (_, __) => const SettingsScreen()),
         GoRoute(path: '/sessions', builder: (_, __) => const SessionsScreen()),
       ],

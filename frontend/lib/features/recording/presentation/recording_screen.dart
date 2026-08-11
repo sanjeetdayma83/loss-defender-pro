@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../core/network/api_client.dart';
 import '../../../core/theme/app_theme.dart';
 import 'recording_session_page.dart';
+import 'recording_detail_page.dart';
 
 class RecordingScreen extends StatefulWidget {
   const RecordingScreen({super.key});
