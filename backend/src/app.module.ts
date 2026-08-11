@@ -1,3 +1,5 @@
+import { ThrottlerGuard } from '@nestjs/throttler';
+import { APP_GUARD } from '@nestjs/core';
 import { SupportModule } from './support/support.module';
 import { RbacModule } from './common/rbac/rbac.module';
 import { BillingModule } from './billing/billing.module';
@@ -30,6 +32,7 @@ import { NotificationsModule } from './notifications/notifications.module';
 import { RealtimeModule } from './realtime/realtime.module';
 
 @Module({
+  providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],
   imports: [
     ConfigModule.forRoot({ isGlobal: true, load: [configuration] }),
     ThrottlerModule.forRoot([{ ttl: 60000, limit: 100 }]),

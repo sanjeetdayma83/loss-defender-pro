@@ -17,6 +17,7 @@ async function bootstrap() {
   validateEnv();
 
   const app = await NestFactory.create(AppModule);
+  const isProd = process.env.NODE_ENV === 'production';
   app.use(helmet());
 
   const swaggerConfig = new DocumentBuilder()
@@ -26,13 +27,12 @@ async function bootstrap() {
     .addBearerAuth()
     .build();
   const document = SwaggerModule.createDocument(app, swaggerConfig);
-  SwaggerModule.setup('api/docs', app, document);
+  if (!isProd) { SwaggerModule.setup('api/docs', app, document); }
 
   const origins = (process.env.CORS_ORIGINS || '')
     .split(',')
     .map((s) => s.trim())
     .filter(Boolean);
-  const isProd = process.env.NODE_ENV === 'production';
 
   app.enableCors({
     origin: isProd
@@ -60,7 +60,7 @@ async function bootstrap() {
     new ValidationPipe({
       whitelist: true,
       transform: true,
-      forbidNonWhitelisted: false,
+      forbidNonWhitelisted: isProd,
     }),
   );
 
