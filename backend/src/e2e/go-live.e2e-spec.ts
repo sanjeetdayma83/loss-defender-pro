@@ -9,6 +9,10 @@ describe('Go-live API smoke E2E', () => {
   beforeAll(async () => {
     const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
     app = moduleRef.createNestApplication();
+
+    // Keep the E2E application contract identical to production bootstrap.
+    app.setGlobalPrefix('api/v1');
+
     await app.init();
   }, 30000);
 
@@ -18,7 +22,8 @@ describe('Go-live API smoke E2E', () => {
 
   it('exposes health endpoint', async () => {
     const res = await request(app.getHttpServer()).get('/api/v1/health');
-    expect([200, 204]).toContain(res.status);
+    expect(res.status).toBe(200);
+    expect(res.body?.status).toBe('ok');
   });
 
   it('keeps billing plan catalogue public', async () => {
