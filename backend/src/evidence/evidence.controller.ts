@@ -19,6 +19,11 @@ export class EvidenceController {
     return this.evidence.list(u.companyId);
   }
 
+  @Get(':id/download')
+  download(@CurrentUser() u: AuthenticatedUser, @Param('id') id: string) {
+    return this.evidence.getDownload(u.companyId, id);
+  }
+
   @Get(':id')
   getOne(@CurrentUser() u: AuthenticatedUser, @Param('id') id: string) {
     return this.evidence.getOne(u.companyId, id);
@@ -31,14 +36,5 @@ export class EvidenceController {
     @Body() body: ExtractFramesDto,
   ) {
     return this.evidence.processLocalVideo(u.companyId, id, body.videoPath);
-  }
-
-  @Post(':id/process-b2')
-  async processB2(
-    @CurrentUser() u: AuthenticatedUser,
-    @Param('id') id: string,
-    @Body() body: { b2Key: string },
-  ) {
-    return this.evidence.processFromB2Key(u.companyId, id, body.b2Key);
   }
 }

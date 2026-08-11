@@ -11,6 +11,13 @@ const execFileAsync = promisify(execFile);
 
 @Injectable()
 export class EvidenceService {
+  async list(companyId: string) {
+    return this.prisma.evidence.findMany({
+      where: { companyId },
+      orderBy: { createdAt: 'desc' },
+      take: 100,
+    });
+  }
   private readonly logger = new Logger(EvidenceService.name);
   private readonly ffmpegBin: string;
 
@@ -22,18 +29,73 @@ export class EvidenceService {
     this.logger.log(`FFmpeg binary: ${this.ffmpegBin}`);
   }
 
-  list(companyId: string) {
-    return this.prisma.evidence.findMany({
-      where: { companyId },
-      orderBy: { createdAt: 'desc' },
-      take: 100,
-    });
-  }
 
   async getOne(companyId: string, id: string) {
     const row = await this.prisma.evidence.findFirst({ where: { id, companyId } });
     if (!row) throw new NotFoundException('Evidence not found');
-    return row;
+
+    let packKey = (row as any).packKey as string | null | undefined;
+    if (!packKey && (row as any).recordingId) {
+      try {
+        const seg = await this.prisma.recordingSegment.findFirst({
+          where: { recordingId: (row as any).recordingId },
+          orderBy: { sequence: 'asc' },
+        });
+        packKey = (seg as any)?.b2Key ?? null;
+        if (packKey) {
+          await this.prisma.evidence.update({
+            where: { id },
+            data: { packKey, status: 'ready' } as any,
+          });
+        }
+      } catch (_) {}
+    }
+    const thumbKey = (row as any).thumbnailKey as string | null | undefined;
+    let packDownloadUrl: string | null = null;
+    let thumbnailUrl: string | null = null;
+
+    if (packKey) {
+      try {
+        const p = await this.storage.presignGet(packKey, 900);
+        packDownloadUrl = (p as any)?.downloadUrl ?? null;
+      } catch (_) {}
+    }
+    if (thumbKey) {
+      try {
+        const t = await this.storage.presignGet(thumbKey, 900);
+        thumbnailUrl = (t as any)?.downloadUrl ?? null;
+      } catch (_) {}
+    }
+
+    let frames: any[] = [];
+    try {
+      frames = await (this.prisma as any).evidenceFrame.findMany({
+        where: { evidenceId: id },
+        orderBy: { sequence: 'asc' },
+      });
+    } catch {
+      frames = [];
+    }
+
+    const framesWithUrls: any[] = [];
+    for (const f of frames) {
+      let downloadUrl: string | null = null;
+      if (f.b2Key) {
+        try {
+          const g = await this.storage.presignGet(f.b2Key, 900);
+          downloadUrl = (g as any)?.downloadUrl ?? null;
+        } catch (_) {}
+      }
+      framesWithUrls.push({ ...f, downloadUrl });
+    }
+
+    return {
+      ...row,
+      packDownloadUrl,
+      thumbnailUrl,
+      frames: framesWithUrls,
+      expiresInSec: 900,
+    };
   }
 
   async processLocalVideo(companyId: string, evidenceId: string, videoPath: string) {
@@ -132,5 +194,17 @@ export class EvidenceService {
     } finally {
       try { fs.unlinkSync(tmp); } catch (_) {}
     }
+  }
+
+  async getDownload(companyId: string, id: string) {
+    const detail = await this.getOne(companyId, id);
+    return {
+      evidenceId: id,
+      packKey: (detail as any).packKey ?? null,
+      packDownloadUrl: (detail as any).packDownloadUrl ?? null,
+      thumbnailUrl: (detail as any).thumbnailUrl ?? null,
+      frames: (detail as any).frames ?? [],
+      expiresInSec: 900,
+    };
   }
 }

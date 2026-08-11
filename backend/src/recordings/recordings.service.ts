@@ -124,8 +124,9 @@ export class RecordingsService {
             companyId,
             orderId: rec.orderId,
             recordingId: rec.id,
-            status: 'pending',
+            status: 'ready',
             frameCount: 0,
+            packKey: sourceKey,
           },
         });
       } catch (e: any) {
@@ -136,7 +137,7 @@ export class RecordingsService {
     } else {
       evidence = await this.prisma.evidence.update({
         where: { id: evidence.id },
-        data: { frameCount: 0, status: 'pending' },
+        data: { frameCount: 0, status: 'ready', packKey: sourceKey },
       });
     }
 
@@ -150,5 +151,95 @@ export class RecordingsService {
         note: 'POST /evidence/:id/process-b2 after client uploaded video bytes to B2',
       },
     };
+  }
+
+  async getOne(companyId: string, id: string) {
+    const row = await this.prisma.recording.findFirst({
+      where: { id, companyId },
+      include: { segments: true } as any,
+    });
+    if (!row) throw new NotFoundException('Recording not found');
+    return row;
+  }
+
+  async addSegment(
+    companyId: string,
+    recordingId: string,
+    input: {
+      sequence: number;
+      b2Key: string;
+      sizeBytes: number;
+      durationSec: number;
+      checksum?: string;
+    },
+  ) {
+    const rec = await this.prisma.recording.findFirst({
+      where: { id: recordingId, companyId },
+    });
+    if (!rec) throw new NotFoundException('Recording not found');
+    try {
+      return await this.prisma.recordingSegment.upsert({
+        where: {
+          recordingId_sequence: { recordingId, sequence: input.sequence },
+        } as any,
+        create: {
+          recordingId,
+          companyId,
+          sequence: input.sequence,
+          b2Key: input.b2Key,
+          sizeBytes: BigInt(input.sizeBytes || 0),
+          durationSec: input.durationSec || 0,
+          checksum: input.checksum ?? null,
+          uploadedAt: new Date(),
+        } as any,
+        update: {
+          b2Key: input.b2Key,
+          sizeBytes: BigInt(input.sizeBytes || 0),
+          durationSec: input.durationSec || 0,
+          uploadedAt: new Date(),
+        } as any,
+      });
+    } catch {
+      return await this.prisma.recordingSegment.create({
+        data: {
+          recordingId,
+          companyId,
+          sequence: input.sequence,
+          b2Key: input.b2Key,
+          sizeBytes: BigInt(input.sizeBytes || 0),
+          durationSec: input.durationSec || 0,
+          checksum: input.checksum ?? null,
+          uploadedAt: new Date(),
+        } as any,
+      });
+    }
+  }
+
+  async getDownload(companyId: string, id: string) {
+    const rec = await this.prisma.recording.findFirst({
+      where: { id, companyId },
+    });
+    if (!rec) throw new NotFoundException('Recording not found');
+    const segs = await this.prisma.recordingSegment.findMany({
+      where: { recordingId: id },
+      orderBy: { sequence: 'asc' },
+    });
+    const segments: any[] = [];
+    for (const s of segs as any[]) {
+      let downloadUrl: string | null = null;
+      try {
+        if (s.b2Key) {
+          const g = await this.storage.presignGet(s.b2Key, 900);
+          downloadUrl = (g as any)?.downloadUrl ?? null;
+        }
+      } catch (_) {}
+      segments.push({
+        sequence: s.sequence,
+        b2Key: s.b2Key,
+        sizeBytes: s.sizeBytes?.toString?.() ?? s.sizeBytes,
+        downloadUrl,
+      });
+    }
+    return { recordingId: id, segments, expiresInSec: 900 };
   }
 }
