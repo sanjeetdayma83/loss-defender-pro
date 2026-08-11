@@ -5,6 +5,9 @@ import { createHash } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { StorageService } from '../storage/storage.service';
 
+const MAX_SEGMENT_BYTES = 100 * 1024 * 1024;
+const ALLOWED_VIDEO_TYPES = new Set(['video/webm', 'video/mp4', 'video/quicktime']);
+
 @Injectable()
 export class RecordingsService {
   constructor(private readonly prisma: PrismaService, private readonly storage: StorageService, @InjectQueue('evidence') private readonly evidenceQueue: Queue) {}
@@ -43,19 +46,23 @@ export class RecordingsService {
 
   async presignSegment(companyId: string, recordingId: string, segmentIndex: number, contentType = 'video/webm') {
     if (!Number.isInteger(segmentIndex) || segmentIndex < 0) throw new BadRequestException('Invalid segment index');
+    if (!ALLOWED_VIDEO_TYPES.has(contentType.toLowerCase())) throw new BadRequestException('Unsupported video content type');
     const rec = await this.prisma.recording.findFirst({ where: { id: recordingId, companyId } });
     if (!rec) throw new NotFoundException('Recording not found');
     if (!this.storage.isConfigured()) throw new BadRequestException('B2 storage is not configured');
     const key = this.storage.recordingSegmentKey(companyId, recordingId, segmentIndex);
-    return { ...(await this.storage.presignPut(key, contentType)), segmentIndex, recordingId };
+    return { ...(await this.storage.presignPut(key, contentType)), segmentIndex, recordingId, maxBytes: MAX_SEGMENT_BYTES };
   }
 
   async registerSegment(companyId: string, recordingId: string, sequence: number, b2Key: string, sizeBytes?: number, durationSec?: number) {
+    if (!Number.isInteger(sequence) || sequence < 0) throw new BadRequestException('Invalid segment sequence');
+    if (sizeBytes != null && (sizeBytes < 1 || sizeBytes > MAX_SEGMENT_BYTES)) throw new BadRequestException('Segment exceeds maximum allowed size');
     const rec = await this.prisma.recording.findFirst({ where: { id: recordingId, companyId } });
     if (!rec) throw new NotFoundException('Recording not found');
     if (!this.storage.isConfigured()) throw new BadRequestException('B2 storage is not configured');
     if (!b2Key.startsWith(`${companyId}/recordings/${recordingId}/`)) throw new BadRequestException('Segment key does not belong to this recording');
     const body = await this.storage.downloadBuffer(b2Key);
+    if (body.length < 1 || body.length > MAX_SEGMENT_BYTES) throw new BadRequestException('Segment exceeds maximum allowed size');
     if (sizeBytes != null && sizeBytes !== body.length) throw new BadRequestException('Segment size mismatch');
     const checksum = createHash('sha256').update(body).digest('hex');
     return this.prisma.recordingSegment.upsert({
