@@ -9,75 +9,45 @@ import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
 
 const ALLOWED_PURPOSES = ['recordings', 'evidence', 'misc', 'claims', 'returns'] as const;
 const ALLOWED_CONTENT_TYPES = [
-  'video/webm',
-  'video/mp4',
-  'image/jpeg',
-  'image/png',
-  'image/webp',
-  'application/json',
-  'application/octet-stream',
+  'video/webm', 'video/mp4', 'image/jpeg', 'image/png', 'image/webp',
+  'application/json', 'application/octet-stream',
 ] as const;
-
-// Max declared size for single-part (bytes). Multipart parts are capped separately.
-const MAX_SINGLE_UPLOAD_BYTES = 100 * 1024 * 1024; // 100 MB
-const MAX_PART_BYTES = 50 * 1024 * 1024; // 50 MB per part
+const MAX_SINGLE_UPLOAD_BYTES = 100 * 1024 * 1024;
+const MAX_PART_BYTES = 50 * 1024 * 1024;
 
 class PresignDto {
-  @IsIn(ALLOWED_PURPOSES as unknown as string[])
-  purpose: string;
-
-  @IsOptional() @IsString()
-  filename?: string;
-
-  @IsOptional()
-  @IsIn(ALLOWED_CONTENT_TYPES as unknown as string[])
-  contentType?: string;
-
-  @IsOptional() @IsInt() @Min(1) @Max(MAX_SINGLE_UPLOAD_BYTES)
-  contentLength?: number;
+  @IsIn(ALLOWED_PURPOSES as unknown as string[]) purpose: string;
+  @IsOptional() @IsString() filename?: string;
+  @IsOptional() @IsIn(ALLOWED_CONTENT_TYPES as unknown as string[]) contentType?: string;
+  @IsOptional() @IsInt() @Min(1) @Max(MAX_SINGLE_UPLOAD_BYTES) contentLength?: number;
 }
-
 class InitMultipartDto {
-  @IsIn(ALLOWED_PURPOSES as unknown as string[])
-  purpose: string;
-
-  @IsOptional() @IsString()
-  filename?: string;
-
-  @IsOptional()
-  @IsIn(ALLOWED_CONTENT_TYPES as unknown as string[])
-  contentType?: string;
-
-  @IsOptional() @IsInt() @Min(1) @Max(5 * 1024 * 1024 * 1024) // 5 GB total
-  totalSize?: number;
+  @IsIn(ALLOWED_PURPOSES as unknown as string[]) purpose: string;
+  @IsOptional() @IsString() filename?: string;
+  @IsOptional() @IsIn(ALLOWED_CONTENT_TYPES as unknown as string[]) contentType?: string;
+  @IsOptional() @IsInt() @Min(1) @Max(5 * 1024 * 1024 * 1024) totalSize?: number;
 }
-
 class PresignPartDto {
   @IsString() key: string;
   @IsString() uploadId: string;
   @IsInt() @Min(1) partNumber: number;
-
-  @IsOptional() @IsInt() @Min(1) @Max(MAX_PART_BYTES)
-  contentLength?: number;
+  @IsOptional() @IsInt() @Min(1) @Max(MAX_PART_BYTES) contentLength?: number;
 }
-
 class PartETag {
   @IsString() ETag: string;
   @IsInt() @Min(1) PartNumber: number;
 }
-
 class CompleteMultipartDto {
   @IsString() key: string;
   @IsString() uploadId: string;
-  @IsArray()
-  @ValidateNested({ each: true })
-  @Type(() => PartETag)
-  parts: PartETag[];
+  @IsArray() @ValidateNested({ each: true }) @Type(() => PartETag) parts: PartETag[];
 }
-
 class AbortMultipartDto {
   @IsString() key: string;
   @IsString() uploadId: string;
+}
+class PresignDownloadDto {
+  @IsString() key: string;
 }
 
 @ApiTags('storage')
@@ -94,69 +64,48 @@ export class StorageController {
 
   @Post('presign-upload')
   @ApiOperation({ summary: 'Simple single-part presigned PUT' })
-  async presignUpload(
-    @CurrentUser() u: AuthenticatedUser,
-    @Body() dto: PresignDto,
-  ) {
+  async presignUpload(@CurrentUser() u: AuthenticatedUser, @Body() dto: PresignDto) {
     if (dto.filename && /[\\/]|\.\./.test(dto.filename)) {
       throw new BadRequestException('Invalid filename');
     }
     const key = this.storage.buildKey(u.companyId, dto.purpose, dto.filename);
-    return this.storage.presignPut(
-      key,
-      dto.contentType || 'application/octet-stream',
-    );
+    return this.storage.presignPut(key, dto.contentType || 'application/octet-stream');
   }
 
-  @Post('multipart/init')
-  @ApiOperation({ summary: 'Start resumable multipart upload' })
-  async initMultipart(
-    @CurrentUser() u: AuthenticatedUser,
-    @Body() dto: InitMultipartDto,
-  ) {
-    if (dto.filename && /[\\/]|\.\./.test(dto.filename)) {
-      throw new BadRequestException('Invalid filename');
-    }
-    const key = this.storage.buildKey(u.companyId, dto.purpose, dto.filename);
-    return this.storage.initMultipart(
-      key,
-      dto.contentType || 'application/octet-stream',
-    );
-  }
-
-  @Post('multipart/presign-part')
-  @ApiOperation({ summary: 'Get presigned URL for one part' })
-  async presignPart(
-    @CurrentUser() u: AuthenticatedUser,
-    @Body() dto: PresignPartDto,
-  ) {
+  @Post('presign-download')
+  @ApiOperation({ summary: 'Presigned GET download/playback' })
+  async presignDownload(@CurrentUser() u: AuthenticatedUser, @Body() dto: PresignDownloadDto) {
+    if (!dto?.key) throw new BadRequestException('key required');
     if (!dto.key.startsWith(u.companyId + '/')) {
       throw new BadRequestException('Invalid key for tenant');
     }
+    return this.storage.presignGet(dto.key);
+  }
+
+  @Post('multipart/init')
+  async initMultipart(@CurrentUser() u: AuthenticatedUser, @Body() dto: InitMultipartDto) {
+    if (dto.filename && /[\\/]|\.\./.test(dto.filename)) {
+      throw new BadRequestException('Invalid filename');
+    }
+    const key = this.storage.buildKey(u.companyId, dto.purpose, dto.filename);
+    return this.storage.initMultipart(key, dto.contentType || 'application/octet-stream');
+  }
+
+  @Post('multipart/presign-part')
+  async presignPart(@CurrentUser() u: AuthenticatedUser, @Body() dto: PresignPartDto) {
+    if (!dto.key.startsWith(u.companyId + '/')) throw new BadRequestException('Invalid key for tenant');
     return this.storage.presignPart(dto.key, dto.uploadId, dto.partNumber);
   }
 
   @Post('multipart/complete')
-  @ApiOperation({ summary: 'Complete multipart upload' })
-  async completeMultipart(
-    @CurrentUser() u: AuthenticatedUser,
-    @Body() dto: CompleteMultipartDto,
-  ) {
-    if (!dto.key.startsWith(u.companyId + '/')) {
-      throw new BadRequestException('Invalid key for tenant');
-    }
+  async completeMultipart(@CurrentUser() u: AuthenticatedUser, @Body() dto: CompleteMultipartDto) {
+    if (!dto.key.startsWith(u.companyId + '/')) throw new BadRequestException('Invalid key for tenant');
     return this.storage.completeMultipart(dto.key, dto.uploadId, dto.parts);
   }
 
   @Post('multipart/abort')
-  @ApiOperation({ summary: 'Abort multipart upload' })
-  async abortMultipart(
-    @CurrentUser() u: AuthenticatedUser,
-    @Body() dto: AbortMultipartDto,
-  ) {
-    if (!dto.key.startsWith(u.companyId + '/')) {
-      throw new BadRequestException('Invalid key for tenant');
-    }
+  async abortMultipart(@CurrentUser() u: AuthenticatedUser, @Body() dto: AbortMultipartDto) {
+    if (!dto.key.startsWith(u.companyId + '/')) throw new BadRequestException('Invalid key for tenant');
     return this.storage.abortMultipart(dto.key, dto.uploadId);
   }
 }

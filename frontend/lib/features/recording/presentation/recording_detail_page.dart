@@ -25,15 +25,37 @@ class _RecordingDetailPageState extends State<RecordingDetailPage> {
     _load();
   }
 
+  Future<String?> _resolveUrl(Map<String, dynamic>? rec) async {
+    if (rec == null) return null;
+    var url = rec['playbackUrl']?.toString() ??
+        rec['videoUrl']?.toString() ??
+        rec['segmentUrl']?.toString();
+    if (url != null && url.startsWith('http')) return url;
+
+    final key = rec['storageKey']?.toString() ??
+        rec['segmentKey']?.toString() ??
+        rec['packKey']?.toString() ??
+        rec['key']?.toString();
+    if (key == null || key.isEmpty) return null;
+
+    try {
+      final pr = await ApiClient.instance.dio.post(
+        '/storage/presign-download',
+        data: {'key': key},
+      );
+      final d = pr.data is Map && pr.data['data'] != null ? pr.data['data'] : pr.data;
+      if (d is Map) return d['downloadUrl']?.toString();
+    } catch (_) {}
+    return null;
+  }
+
   Future<void> _load() async {
     setState(() { _loading = true; _error = null; });
     try {
       final res = await ApiClient.instance.dio.get('/recordings/${widget.recordingId}');
       final data = res.data is Map && res.data['data'] != null ? res.data['data'] : res.data;
       _rec = data is Map ? Map<String, dynamic>.from(data) : _rec;
-      final url = _rec?['playbackUrl']?.toString() ??
-          _rec?['videoUrl']?.toString() ??
-          _rec?['segmentUrl']?.toString();
+      final url = await _resolveUrl(_rec);
       if (url != null && url.startsWith('http')) {
         await _player?.dispose();
         _player = VideoPlayerController.networkUrl(Uri.parse(url));
@@ -82,7 +104,7 @@ class _RecordingDetailPageState extends State<RecordingDetailPage> {
                     child: ListTile(
                       leading: Icon(Icons.videocam_off),
                       title: Text('No stream URL yet'),
-                      subtitle: Text('Needs presigned playback URL from API'),
+                      subtitle: Text('Upload a segment or set storageKey on recording'),
                     ),
                   ),
               ],
