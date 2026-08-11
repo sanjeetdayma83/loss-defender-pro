@@ -1,6 +1,7 @@
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
+import helmet from 'helmet';
 import { AppModule } from './app.module';
 import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
 import { TransformInterceptor } from './common/interceptors/transform.interceptor';
@@ -16,6 +17,14 @@ async function bootstrap() {
   validateEnv();
 
   const app = await NestFactory.create(AppModule);
+  const isProd = process.env.NODE_ENV === 'production';
+
+  app.use(
+    helmet({
+      contentSecurityPolicy: false,
+      crossOriginResourcePolicy: { policy: 'cross-origin' },
+    }),
+  );
 
   const swaggerConfig = new DocumentBuilder()
     .setTitle('Loss Defender Pro API')
@@ -24,13 +33,14 @@ async function bootstrap() {
     .addBearerAuth()
     .build();
   const document = SwaggerModule.createDocument(app, swaggerConfig);
-  SwaggerModule.setup('api/docs', app, document);
+  if (!isProd) {
+    SwaggerModule.setup('api/docs', app, document);
+  }
 
   const origins = (process.env.CORS_ORIGINS || '')
     .split(',')
     .map((s) => s.trim())
     .filter(Boolean);
-  const isProd = process.env.NODE_ENV === 'production';
 
   app.enableCors({
     origin: isProd
@@ -58,13 +68,14 @@ async function bootstrap() {
     new ValidationPipe({
       whitelist: true,
       transform: true,
-      forbidNonWhitelisted: false,
+      forbidNonWhitelisted: isProd,
     }),
   );
 
   app.useGlobalInterceptors(
     new LoggingInterceptor(),
-    new SanitizeInterceptor(), new TransformInterceptor(),
+    new SanitizeInterceptor(),
+    new TransformInterceptor(),
   );
 
   const port = process.env.PORT ? Number(process.env.PORT) : 3000;
