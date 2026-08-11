@@ -29,3 +29,6 @@ Thumbs.db
 schema.current*
 backend/coverage/
 
+
+# TypeScript build cache
+*.tsbuildinfo
