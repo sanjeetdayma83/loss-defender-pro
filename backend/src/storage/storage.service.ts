@@ -124,7 +124,7 @@ export class StorageService {
       Key: key,
       ContentType: contentType,
     });
-    const res = await this.client.send(cmd);
+    const res = await (this.client as any).send(cmd);
     return {
       configured: true,
       uploadId: res.UploadId!,
@@ -166,7 +166,7 @@ export class StorageService {
       UploadId: uploadId,
       MultipartUpload: { Parts: parts },
     });
-    const res = await this.client.send(cmd);
+    const res = await (this.client as any).send(cmd);
     return {
       configured: true,
       key,
@@ -179,7 +179,7 @@ export class StorageService {
     if (!this.configured || !this.client || !this.bucket) {
       return { configured: false };
     }
-    await this.client.send(
+    await (this.client as any).send(
       new AbortMultipartUploadCommand({
         Bucket: this.bucket,
         Key: key,
@@ -198,7 +198,7 @@ export class StorageService {
       Body: body,
       ContentType: contentType,
     });
-    const out = await this.client.send(cmd);
+    const out = await (this.client as any).send(cmd);
     return { configured: true, key, etag: out.ETag ?? null };
   }
 

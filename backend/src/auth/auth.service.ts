@@ -7,7 +7,7 @@ import { ConfigService } from '@nestjs/config';
 import { EmailService } from '../email/email.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { CompanyPlan, Prisma } from '@prisma/client';
-import * as bcrypt from 'bcrypt';
+import * as bcrypt from 'bcryptjs';
 import { createHash, randomInt, randomBytes } from 'crypto';
 import {
   RegisterDto, LoginDto, ForgotPasswordDto, ResetPasswordDto,

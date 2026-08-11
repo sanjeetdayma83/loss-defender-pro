@@ -4,7 +4,7 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { InviteUserDto, UpdateUserDto } from './dto/user.dto';
-import * as bcrypt from 'bcrypt';
+import * as bcrypt from 'bcryptjs';
 import { randomBytes, createHash } from 'crypto';
 import { EmailService } from '../email/email.service';
 

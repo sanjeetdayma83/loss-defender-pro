@@ -48,8 +48,7 @@ export class OtpService {
     });
     if (
       last &&
-      Date.now() - new Date((last as any).createdAt).getTime() 
-        REQUEST_COOLDOWN_MS
+      Date.now() - new Date((last as any).createdAt).getTime()  < REQUEST_COOLDOWN_MS
     ) {
       throw new BadRequestException(
         'Please wait a minute before requesting another code.',

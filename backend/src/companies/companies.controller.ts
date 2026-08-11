@@ -1,6 +1,4 @@
-import {
-  Body, Controller, Get, Patch, Req, UseGuards,
-} from '@nestjs/common';
+import { Body, Controller, Get, Patch, Req, UseGuards } from '@nestjs/common';
 import { CompaniesService } from './companies.service';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { TenantGuard } from '../common/guards/tenant.guard';
@@ -9,7 +7,6 @@ import { Roles } from '../common/decorators/roles.decorator';
 import { Role } from '@prisma/client';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { Request } from 'express';
-import { UpdateCompanyDto } from './dto/update-company.dto';
 
 @ApiTags('companies')
 @ApiBearerAuth()
@@ -33,9 +30,9 @@ export class CompaniesController {
   @Roles(Role.owner, Role.manager, Role.super_admin)
   updateMe(
     @CurrentUser() u: AuthenticatedUser,
-    @Body() dto: UpdateCompanyDto,
+    @Body() dto: Record<string, unknown>,
     @Req() req: Request,
   ) {
-    return this.service.updateMine(u.companyId, u.sub, dto, req.ip);
+    return this.service.updateMine(u.companyId, u.sub, dto as any, req.ip);
   }
 }

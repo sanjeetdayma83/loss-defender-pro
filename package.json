@@ -2,8 +2,14 @@
   "name": "loss-defender-pro",
   "private": true,
   "version": "3.0.0",
-  "workspaces": ["backend"],
+  "workspaces": [
+    "backend"
+  ],
   "scripts": {
     "dev:backend": "npm run start:dev --workspace=backend"
+  },
+  "dependencies": {
+    "bcryptjs": "^3.0.3",
+    "rxjs": "^7.8.2"
   }
 }
