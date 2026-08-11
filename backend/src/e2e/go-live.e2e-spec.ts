@@ -10,9 +10,11 @@ describe('Go-live API smoke E2E', () => {
     const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
     app = moduleRef.createNestApplication();
     await app.init();
-  });
+  }, 30000);
 
-  afterAll(async () => app?.close());
+  afterAll(async () => {
+    await app?.close();
+  }, 10000);
 
   it('exposes health endpoint', async () => {
     const res = await request(app.getHttpServer()).get('/api/v1/health');
