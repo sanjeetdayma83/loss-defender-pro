@@ -1,4 +1,4 @@
-import 'package:dio/dio.dart';
+﻿import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import '../../../core/network/api_client.dart';
@@ -7,63 +7,96 @@ import '../../../core/widgets/app_dialogs.dart';
 
 class ScannerScreen extends StatefulWidget {
   const ScannerScreen({super.key});
-
   @override
   State<ScannerScreen> createState() => _ScannerScreenState();
 }
 
 class _ScannerScreenState extends State<ScannerScreen> {
-  final _orderCtrl = TextEditingController();
   final _manualCtrl = TextEditingController();
+  List<Map<String, dynamic>> _orders = [];
+  String? _orderId;
+  bool _loadingOrders = true;
   bool _cameraOn = false;
   bool _busy = false;
   String? _lastResult;
+
   final _controller = MobileScannerController(
     detectionSpeed: DetectionSpeed.normal,
     facing: CameraFacing.back,
   );
 
   @override
+  void initState() {
+    super.initState();
+    _loadOrders();
+  }
+
+  @override
   void dispose() {
-    _orderCtrl.dispose();
     _manualCtrl.dispose();
     _controller.dispose();
     super.dispose();
   }
 
+  Future<void> _loadOrders() async {
+    setState(() => _loadingOrders = true);
+    try {
+      final res = await ApiClient.instance.dio.get('/orders');
+      final data = res.data is Map && res.data['data'] != null ? res.data['data'] : res.data;
+      final list = (data is List ? data : <dynamic>[])
+          .whereType<Map>()
+          .map((e) => Map<String, dynamic>.from(e))
+          .where((o) {
+            final s = (o['status'] ?? '').toString();
+            return ['packing', 'queued', 'synced', 'recording', 'scanned'].contains(s);
+          })
+          .toList();
+      // fallback: show all if none scannable
+      final all = (data is List ? data : <dynamic>[])
+          .whereType<Map>()
+          .map((e) => Map<String, dynamic>.from(e))
+          .toList();
+      setState(() {
+        _orders = list.isNotEmpty ? list : all;
+        if (_orders.isNotEmpty && _orderId == null) {
+          _orderId = _orders.first['id']?.toString();
+        }
+        _loadingOrders = false;
+      });
+    } on DioException catch (e) {
+      setState(() => _loadingOrders = false);
+      if (mounted) {
+        AppDialogs.error(context, message: e.response?.data?['message']?.toString() ?? e.message ?? 'Orders failed');
+      }
+    }
+  }
+
   Future<void> _submit(String barcode) async {
-    final orderId = _orderCtrl.text.trim();
-    if (orderId.isEmpty) {
-      await AppDialogs.info(context,
-          title: 'Order required',
-          message: 'Enter Order UUID before scanning.');
+    if (_orderId == null || _orderId!.isEmpty) {
+      await AppDialogs.info(context, title: 'Order required', message: 'Select an order first.');
       return;
     }
     if (_busy) return;
     setState(() => _busy = true);
     try {
       final res = await ApiClient.instance.dio.post('/scanner/scan', data: {
-        'orderId': orderId,
+        'orderId': _orderId,
         'barcode': barcode,
+        'source': 'camera',
       });
-      final body = res.data;
-      final data = body is Map && body['data'] != null ? body['data'] : body;
+      final data = res.data is Map && res.data['data'] != null ? res.data['data'] : res.data;
       final result = data is Map ? data['result']?.toString() : null;
-      setState(() => _lastResult = 'OK: $barcode → $result');
+      setState(() => _lastResult = '$barcode → $result');
       if (result == 'matched') {
         await AppDialogs.success(context, message: 'Matched: $barcode');
       } else {
-        await AppDialogs.info(context,
-            title: 'Scan result', message: '$result — $barcode');
+        await AppDialogs.info(context, title: 'Scan', message: '$result — $barcode');
       }
     } on DioException catch (e) {
       final msg = e.response?.data is Map
-          ? (e.response!.data['message'] ??
-              e.response!.data['error']?['message'] ??
-              e.message)
+          ? (e.response!.data['message'] ?? e.message)
           : e.message;
-      final code = e.response?.statusCode;
-      if (code == 409) {
+      if (e.response?.statusCode == 409) {
         await AppDialogs.duplicateScan(context, message: msg?.toString() ?? 'Duplicate');
       } else {
         await AppDialogs.error(context, message: msg?.toString() ?? 'Scan failed');
@@ -74,37 +107,49 @@ class _ScannerScreenState extends State<ScannerScreen> {
     }
   }
 
+  String _label(Map<String, dynamic> o) {
+    final name = o['customerName'] ?? o['marketplaceOrderId'] ?? o['id'];
+    final st = o['status'] ?? '';
+    return '$name · $st';
+  }
+
   @override
   Widget build(BuildContext context) {
-    final isWide = MediaQuery.of(context).size.width >= 900;
     return Padding(
-      padding: EdgeInsets.all(isWide ? 24 : 16),
+      padding: const EdgeInsets.all(16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          const Text('Scanner',
-              style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800)),
-          const SizedBox(height: 4),
-          const Text('Scan barcodes against an order — duplicate & SKU checks live.',
-              style: TextStyle(fontSize: 13, color: AppColors.textSecondary)),
-          const SizedBox(height: 16),
-          TextField(
-            controller: _orderCtrl,
-            decoration: const InputDecoration(
-              labelText: 'Order ID (UUID)',
-              border: OutlineInputBorder(),
-              prefixIcon: Icon(Icons.tag),
-            ),
-          ),
+          const Text('Scanner', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
           const SizedBox(height: 12),
+          if (_loadingOrders)
+            const LinearProgressIndicator()
+          else
+            DropdownButtonFormField<String>(
+              value: _orderId,
+              decoration: const InputDecoration(
+                labelText: 'Order',
+                border: OutlineInputBorder(),
+                isDense: true,
+              ),
+              items: _orders
+                  .map((o) => DropdownMenuItem(
+                        value: o['id']?.toString(),
+                        child: Text(_label(o), overflow: TextOverflow.ellipsis),
+                      ))
+                  .toList(),
+              onChanged: (v) => setState(() => _orderId = v),
+            ),
+          const SizedBox(height: 8),
           Row(
             children: [
               Expanded(
                 child: TextField(
                   controller: _manualCtrl,
                   decoration: const InputDecoration(
-                    labelText: 'Manual barcode',
+                    labelText: 'Manual barcode / SKU',
                     border: OutlineInputBorder(),
+                    isDense: true,
                   ),
                   onSubmitted: (v) {
                     if (v.trim().isNotEmpty) _submit(v.trim());
@@ -113,64 +158,43 @@ class _ScannerScreenState extends State<ScannerScreen> {
               ),
               const SizedBox(width: 8),
               FilledButton(
-                onPressed: _busy
-                    ? null
-                    : () {
-                        final v = _manualCtrl.text.trim();
-                        if (v.isNotEmpty) _submit(v);
-                      },
-                child: const Text('Submit'),
+                onPressed: _busy ? null : () => _submit(_manualCtrl.text.trim()),
+                child: const Text('Scan'),
               ),
             ],
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 8),
           Row(
             children: [
-              FilledButton.icon(
-                onPressed: () => setState(() => _cameraOn = !_cameraOn),
-                icon: Icon(_cameraOn ? Icons.videocam_off : Icons.qr_code_scanner),
-                label: Text(_cameraOn ? 'Stop Camera' : 'Start Camera'),
+              FilterChip(
+                label: Text(_cameraOn ? 'Camera ON' : 'Camera OFF'),
+                selected: _cameraOn,
+                onSelected: (v) => setState(() => _cameraOn = v),
               ),
-              const SizedBox(width: 12),
-              if (_lastResult != null)
-                Expanded(
-                  child: Text(_lastResult!,
-                      style: const TextStyle(fontSize: 12),
-                      overflow: TextOverflow.ellipsis),
-                ),
+              const SizedBox(width: 8),
+              TextButton.icon(onPressed: _loadOrders, icon: const Icon(Icons.refresh), label: const Text('Orders')),
             ],
           ),
+          if (_lastResult != null) ...[
+            const SizedBox(height: 8),
+            Text(_lastResult!, style: const TextStyle(fontSize: 13, color: AppColors.textSecondary)),
+          ],
           const SizedBox(height: 12),
           if (_cameraOn)
             Expanded(
               child: ClipRRect(
-                borderRadius: BorderRadius.circular(16),
+                borderRadius: BorderRadius.circular(12),
                 child: MobileScanner(
                   controller: _controller,
                   onDetect: (capture) {
-                    final bars = capture.barcodes;
-                    if (bars.isEmpty) return;
-                    final raw = bars.first.rawValue;
-                    if (raw != null && raw.isNotEmpty) {
-                      _submit(raw);
-                    }
+                    final raw = capture.barcodes.isEmpty ? null : capture.barcodes.first.rawValue;
+                    if (raw != null && raw.isNotEmpty) _submit(raw);
                   },
                 ),
               ),
             )
           else
-            Expanded(
-              child: Container(
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: AppColors.border),
-                ),
-                child: const Text('Camera off — use manual entry or start camera',
-                    style: TextStyle(color: AppColors.textSecondary)),
-              ),
-            ),
+            const Expanded(child: Center(child: Text('Turn camera on or enter barcode manually'))),
         ],
       ),
     );
