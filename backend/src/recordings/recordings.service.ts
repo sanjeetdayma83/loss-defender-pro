@@ -17,7 +17,15 @@ export class RecordingsService {
   async getOne(companyId: string, id: string) {
     const rec = await this.prisma.recording.findFirst({ where: { id, companyId }, include: { segments: { orderBy: { sequence: 'asc' } }, evidence: true } });
     if (!rec) throw new NotFoundException('Recording not found');
-    return rec;
+    let playbackUrl: string | null = null;
+    const segs = (rec as any).segments || [];
+    if (segs[0]?.b2Key && this.storage.isConfigured()) {
+      try {
+        const signed = await this.storage.presignGet(segs[0].b2Key, 900);
+        playbackUrl = (signed as any).downloadUrl || (signed as any).url || null;
+      } catch (_) {}
+    }
+    return { ...rec, playbackUrl };
   }
 
   async start(companyId: string, actorId: string, orderId: string, warehouseId: string) {
@@ -70,5 +78,22 @@ export class RecordingsService {
       create: { recordingId, companyId, sequence, b2Key, sizeBytes: BigInt(body.length), durationSec, checksum },
       update: { b2Key, sizeBytes: BigInt(body.length), durationSec, checksum, uploadedAt: new Date() },
     });
+  }
+
+  async listSegments(companyId: string, recordingId: string) {
+    const rec = await this.prisma.recording.findFirst({ where: { id: recordingId, companyId } });
+    if (!rec) throw new NotFoundException('Recording not found');
+    return (this.prisma as any).recordingSegment.findMany({
+      where: { recordingId, companyId },
+      orderBy: { sequence: 'asc' },
+    });
+  }
+
+  async segmentDownloadUrl(companyId: string, recordingId: string, sequence: number) {
+    const seg = await (this.prisma as any).recordingSegment.findFirst({
+      where: { recordingId, companyId, sequence },
+    });
+    if (!seg?.b2Key) throw new NotFoundException('Segment not found');
+    return this.storage.presignGet(seg.b2Key, 900);
   }
 }

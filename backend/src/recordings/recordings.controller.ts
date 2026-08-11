@@ -18,4 +18,14 @@ export class RecordingsController {
   @Post(':id/segments/presign') presignSegment(@CurrentUser() u: AuthenticatedUser, @Param('id') id: string, @Body() dto: PresignSegmentDto) { return this.recordings.presignSegment(u.companyId, id, dto.segmentIndex, dto.contentType || 'video/webm'); }
   @Post(':id/presign-segment') presignLegacy(@CurrentUser() u: AuthenticatedUser, @Param('id') id: string, @Body() dto: PresignSegmentDto) { return this.recordings.presignSegment(u.companyId, id, dto.segmentIndex, dto.contentType || 'video/webm'); }
   @Post(':id/segments') registerSegment(@CurrentUser() u: AuthenticatedUser, @Param('id') id: string, @Body() dto: RegisterSegmentDto) { return this.recordings.registerSegment(u.companyId, id, dto.sequence, dto.b2Key, dto.sizeBytes, dto.durationSec); }
+
+  @Get(':id/segments')
+  listSegments(@CurrentUser() u: AuthenticatedUser, @Param('id') id: string) {
+    return this.recordings.listSegments(u.companyId, id);
+  }
+
+  @Get(':id/segments/:sequence/url')
+  segmentUrl(@CurrentUser() u: AuthenticatedUser, @Param('id') id: string, @Param('sequence') sequence: string) {
+    return this.recordings.segmentDownloadUrl(u.companyId, id, Number(sequence));
+  }
 }
