@@ -1,3 +1,4 @@
+import '../../features/billing/presentation/billing_screen.dart';
 import '../../features/auth/presentation/sessions_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
@@ -51,6 +52,7 @@ final appRouter = GoRouter(
         GoRoute(path: '/claims', builder: (_, __) => const ClaimsScreen()),
         GoRoute(path: '/marketplace', builder: (_, __) => const MarketplaceScreen()),
         GoRoute(path: '/alerts', builder: (_, __) => const AlertsScreen()),
+        GoRoute(path: '/billing', builder: (_, __) => const BillingScreen()),
         GoRoute(path: '/settings', builder: (_, __) => const SettingsScreen()),
         GoRoute(path: '/sessions', builder: (_, __) => const SessionsScreen()),
       ],
