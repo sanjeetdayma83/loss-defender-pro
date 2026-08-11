@@ -1,3 +1,4 @@
+import { assertCanAddUser } from '../common/utils/quota';
 import {
   Injectable, NotFoundException, ConflictException,
 } from '@nestjs/common';
@@ -120,6 +121,7 @@ export class UsersService {
   }
 
   async invite(companyId: string, actorId: string, dto: InviteUserDto, ip?: string) {
+    await assertCanAddUser(this.prisma as any, companyId);
     const exists = await this.prisma.user.findFirst({ where: { email: dto.email } });
     if (exists) throw new ConflictException('Email already registered');
 

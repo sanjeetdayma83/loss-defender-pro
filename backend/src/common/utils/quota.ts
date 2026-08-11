@@ -1,22 +1,33 @@
 ﻿import { ForbiddenException } from '@nestjs/common';
-import { planById, PLANS } from '../../billing/plans.catalog';
+import { PrismaClient } from '@prisma/client';
 
-export async function assertUserQuota(prisma: any, companyId: string) {
-  const c = await prisma.company.findFirst({ where: { id: companyId } });
-  const planId = (c as any)?.plan || 'starter';
-  const plan = planById(planId) || PLANS[0];
-  const count = await prisma.user.count({ where: { companyId } });
-  if (count >= plan.userLimit) {
-    throw new ForbiddenException(`User limit reached for plan ${plan.name} (${plan.userLimit})`);
+const LIMITS: Record<string, { users: number; warehouses: number }> = {
+  free: { users: 5, warehouses: 1 },
+  starter: { users: 3, warehouses: 1 },
+  growth: { users: 25, warehouses: 5 },
+  enterprise: { users: 1000, warehouses: 100 },
+};
+
+export async function assertCanAddUser(prisma: PrismaClient, companyId: string) {
+  const company = await prisma.company.findFirst({ where: { id: companyId } });
+  const plan = String((company as any)?.plan || 'free').toLowerCase();
+  const max = LIMITS[plan]?.users ?? LIMITS.free.users;
+  const count = await prisma.user.count({
+    where: { companyId, status: { not: 'deleted' } },
+  });
+  if (count >= max) {
+    throw new ForbiddenException(`User limit reached for plan ${plan} (${max})`);
   }
 }
 
-export async function assertWarehouseQuota(prisma: any, companyId: string) {
-  const c = await prisma.company.findFirst({ where: { id: companyId } });
-  const planId = (c as any)?.plan || 'starter';
-  const plan = planById(planId) || PLANS[0];
-  const count = await prisma.warehouse.count({ where: { companyId } });
-  if (count >= plan.warehouseLimit) {
-    throw new ForbiddenException(`Warehouse limit reached for plan ${plan.name} (${plan.warehouseLimit})`);
+export async function assertCanAddWarehouse(prisma: PrismaClient, companyId: string) {
+  const company = await prisma.company.findFirst({ where: { id: companyId } });
+  const plan = String((company as any)?.plan || 'free').toLowerCase();
+  const max = LIMITS[plan]?.warehouses ?? 1;
+  const count = await prisma.warehouse.count({
+    where: { companyId } as any,
+  });
+  if (count >= max) {
+    throw new ForbiddenException(`Warehouse limit reached for plan ${plan} (${max})`);
   }
 }
