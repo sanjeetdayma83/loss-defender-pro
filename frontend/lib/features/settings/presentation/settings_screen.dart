@@ -1,3 +1,4 @@
+import 'package:go_router/go_router.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import '../../../core/network/api_client.dart';
@@ -178,6 +179,23 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   ],
                 ),
               ],
+            ),
+          ),
+          const SizedBox(height: 16),
+          Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: AppColors.border),
+            ),
+            child: ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: const Icon(Icons.devices_other),
+              title: const Text('Active sessions'),
+              subtitle: const Text('View and revoke devices'),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () => context.go('/sessions'),
             ),
           ),
           const SizedBox(height: 16),

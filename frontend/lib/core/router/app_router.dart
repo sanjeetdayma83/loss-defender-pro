@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../shell/app_shell.dart';
 import '../storage/secure_storage.dart';
@@ -21,6 +21,10 @@ import '../../features/returns/presentation/returns_screen.dart';
 import '../../features/evidence/presentation/evidence_screen.dart';
 import '../../features/claims/presentation/claims_screen.dart';
 import '../../features/settings/presentation/settings_screen.dart';
+import '../../features/stations/presentation/stations_screen.dart';
+import '../../features/notifications/presentation/notifications_screen.dart';
+import '../../features/billing/presentation/billing_screen.dart';
+import '../../features/supervisor/presentation/supervisor_screen.dart';
 import '../../features/marketplace/presentation/marketplace_screen.dart';
 import '../../features/alerts/presentation/alerts_screen.dart';
 
@@ -98,10 +102,13 @@ final appRouter = GoRouter(
         GoRoute(path: '/claims', builder: (_, _) => const ClaimsScreen()),
         GoRoute(path: '/marketplace', builder: (_, _) => const MarketplaceScreen()),
         GoRoute(path: '/alerts', builder: (_, _) => const AlertsScreen()),
+        GoRoute(path: '/stations', builder: (_, _) => const StationsScreen()),
+        GoRoute(path: '/notifications', builder: (_, _) => const NotificationsScreen()),
+        GoRoute(path: '/supervisor', builder: (_, _) => const SupervisorScreen()),
         GoRoute(path: '/settings', builder: (_, _) => const SettingsScreen()),
         GoRoute(path: '/sessions', builder: (_, _) => const SessionsScreen()),
         GoRoute(path: '/admin', builder: (_, _) => const _PlaceholderScreen('Admin')),
-        GoRoute(path: '/billing', builder: (_, _) => const _PlaceholderScreen('Billing')),
+        GoRoute(path: '/billing', builder: (_, _) => const BillingScreen()),
         GoRoute(path: '/support', builder: (_, _) => const _PlaceholderScreen('Support')),
       ],
     ),

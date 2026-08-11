@@ -1,87 +1,63 @@
 import 'package:flutter/material.dart';
-import '../../../core/theme/app_theme.dart';
+import '../../../core/network/api_client.dart';
 
-class MarketplaceScreen extends StatelessWidget {
+class MarketplaceScreen extends StatefulWidget {
   const MarketplaceScreen({super.key});
+  @override
+  State<MarketplaceScreen> createState() => _MarketplaceScreenState();
+}
+
+class _MarketplaceScreenState extends State<MarketplaceScreen> {
+  List<dynamic> _conn = [];
+  String? _syncMsg;
+  bool _loading = true;
+
+  @override
+  void initState() { super.initState(); _load(); }
+
+  List<dynamic> _asList(dynamic body) {
+    if (body is Map && body['data'] is List) return body['data'] as List;
+    if (body is List) return body;
+    return [];
+  }
+
+  Future<void> _load() async {
+    setState(() => _loading = true);
+    try {
+      final res = await ApiClient.instance.dio.get('/marketplace/connections');
+      setState(() { _conn = _asList(res.data); _loading = false; });
+    } catch (_) {
+      setState(() { _conn = []; _loading = false; });
+    }
+  }
+
+  Future<void> _sync() async {
+    try {
+      final res = await ApiClient.instance.dio.post('/marketplace/sync', data: {'provider': 'amazon'});
+      final d = res.data is Map ? res.data['data'] ?? res.data : res.data;
+      setState(() => _syncMsg = d.toString());
+    } catch (e) {
+      setState(() => _syncMsg = e.toString());
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
-    final isWide = MediaQuery.of(context).size.width >= 700;
-    final channels = [
-      _Channel('Amazon', Icons.shopping_cart, 'Connect Amazon SP-API'),
-      _Channel('Flipkart', Icons.store, 'Connect Flipkart API'),
-      _Channel('Meesho', Icons.storefront, 'Connect Meesho'),
-      _Channel('Shopify', Icons.shopping_bag, 'Connect Shopify store'),
-      _Channel('WooCommerce', Icons.web, 'Connect WooCommerce'),
-      _Channel('Manual', Icons.edit_note, 'Create orders manually'),
-    ];
-
-    return ListView(
-      padding: EdgeInsets.all(isWide ? 24 : 16),
-      children: [
-        const Text('Marketplace', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-        const SizedBox(height: 8),
-        const Text('Connect marketplaces to sync orders automatically.',
-            style: TextStyle(color: AppColors.textSecondary)),
-        const SizedBox(height: 20),
-        LayoutBuilder(builder: (context, c) {
-          final cross = c.maxWidth > 800 ? 3 : (c.maxWidth > 500 ? 2 : 1);
-          return GridView.builder(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: cross,
-              mainAxisSpacing: 12,
-              crossAxisSpacing: 12,
-              childAspectRatio: 1.8,
-            ),
-            itemCount: channels.length,
-            itemBuilder: (_, i) {
-              final ch = channels[i];
-              return Card(
-                child: InkWell(
-                  borderRadius: BorderRadius.circular(12),
-                  onTap: () {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('${ch.name} connection wizard — next')),
-                    );
-                  },
-                  child: Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Row(
-                      children: [
-                        CircleAvatar(
-                          backgroundColor: AppColors.accent.withValues(alpha: 0.12),
-                          child: Icon(ch.icon, color: AppColors.accent),
-                        ),
-                        const SizedBox(width: 14),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Text(ch.name, style: const TextStyle(fontWeight: FontWeight.w600)),
-                              Text(ch.subtitle,
-                                  style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
-                            ],
-                          ),
-                        ),
-                        const Icon(Icons.chevron_right, color: AppColors.textSecondary),
-                      ],
-                    ),
-                  ),
-                ),
-              );
-            },
-          );
-        }),
-      ],
+    return Scaffold(
+      backgroundColor: const Color(0xFFF8FAFC),
+      appBar: AppBar(title: const Text('Marketplace'), actions: [
+        TextButton(onPressed: _sync, child: const Text('Sync (stub)')),
+      ]),
+      body: _loading
+          ? const Center(child: CircularProgressIndicator())
+          : ListView(padding: const EdgeInsets.all(16), children: [
+              if (_syncMsg != null) Text(_syncMsg!, style: const TextStyle(fontSize: 12)),
+              if (_conn.isEmpty) const Text('No connections — OAuth not configured yet'),
+              ..._conn.map((c) {
+                final m = Map<String, dynamic>.from(c as Map);
+                return ListTile(title: Text('${m['provider'] ?? m['storeName'] ?? m}'));
+              }),
+            ]),
     );
   }
-}
-
-class _Channel {
-  final String name, subtitle;
-  final IconData icon;
-  const _Channel(this.name, this.icon, this.subtitle);
 }

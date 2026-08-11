@@ -242,6 +242,26 @@ class _OrdersScreenState extends State<OrdersScreen> {
     }
   }
 
+
+  Future<void> _openDetail(Map o) async {
+    final id = o['id']?.toString();
+    if (id == null) return;
+    try {
+      final res = await ApiClient.instance.dio.get('/orders/$id');
+      final body = res.data;
+      final data = body is Map && body['data'] != null ? body['data'] : body;
+      if (!mounted || data is! Map) return;
+      await showModalBottomSheet(
+        context: context,
+        isScrollControlled: true,
+        builder: (_) => OrderDetailSheet(order: Map<String, dynamic>.from(data)),
+      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+      }
+    }
+  }
   Color _statusColor(String s) {
     switch (s.toLowerCase()) {
       case 'dispatched':
@@ -430,7 +450,10 @@ class _OrdersScreenState extends State<OrdersScreen> {
                                 : o['warehouseId']?.toString();
                             final sc = _statusColor(status);
 
-                            return Container(
+                            return InkWell(
+                              onTap: () => _openDetail(o),
+                              borderRadius: BorderRadius.circular(12),
+                              child: Container(
                               padding: const EdgeInsets.symmetric(
                                   horizontal: 16, vertical: 14),
                               decoration: BoxDecoration(
@@ -571,6 +594,49 @@ class _Kpi extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class OrderDetailSheet extends StatelessWidget {
+  const OrderDetailSheet({super.key, required this.order});
+  final Map<String, dynamic> order;
+
+  @override
+  Widget build(BuildContext context) {
+    final items = (order['items'] is List) ? order['items'] as List : <dynamic>[];
+    return DraggableScrollableSheet(
+      expand: false,
+      initialChildSize: 0.55,
+      minChildSize: 0.35,
+      maxChildSize: 0.92,
+      builder: (_, scroll) => Material(
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+        child: ListView(
+          controller: scroll,
+          padding: const EdgeInsets.all(20),
+          children: [
+            Text('Order detail', style: Theme.of(context).textTheme.titleLarge),
+            const SizedBox(height: 8),
+            Text('Status: ${order['status'] ?? '—'}'),
+            Text('Customer: ${order['customerName'] ?? '—'}'),
+            Text('WH: ${order['warehouse'] is Map ? (order['warehouse'] as Map)['name'] : '—'}'),
+            const Divider(height: 24),
+            const Text('Items / scan', style: TextStyle(fontWeight: FontWeight.w700)),
+            ...items.map((raw) {
+              final it = Map<String, dynamic>.from(raw as Map);
+              return ListTile(
+                dense: true,
+                contentPadding: EdgeInsets.zero,
+                title: Text('${it['sku'] ?? ''} — ${it['name'] ?? ''}'),
+                subtitle: Text(
+                  'qty ${it['qty'] ?? 0} · scanned ${it['scannedQty'] ?? 0} · ${it['status'] ?? ''}',
+                ),
+              );
+            }),
+          ],
+        ),
       ),
     );
   }
