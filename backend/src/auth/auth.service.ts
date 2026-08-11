@@ -1,30 +1,278 @@
 import { Injectable, UnauthorizedException, BadRequestException, ForbiddenException, NotFoundException } from '@nestjs/common';
-import { JwtService } from '@nestjs/jwt'; import { ConfigService } from '@nestjs/config'; import { EmailService } from '../email/email.service'; import { PrismaService } from '../prisma/prisma.service'; import { CompanyPlan } from '@prisma/client'; import * as bcrypt from 'bcrypt'; import { createHash, randomInt, randomBytes, randomUUID } from 'crypto';
+import { JwtService } from '@nestjs/jwt';
+import { ConfigService } from '@nestjs/config';
+import { EmailService } from '../email/email.service';
+import { PrismaService } from '../prisma/prisma.service';
+import { CompanyPlan } from '@prisma/client';
+import * as bcrypt from 'bcrypt';
+import { createHash, randomInt, randomBytes, randomUUID } from 'crypto';
 import { RegisterDto, LoginDto, ForgotPasswordDto, ResetPasswordDto, VerifyEmailDto, RefreshDto, LogoutDto } from './dto/auth.dto';
+
+const PASSWORD_HISTORY_LIMIT = 5;
+
 @Injectable()
 export class AuthService {
-  constructor(private readonly prisma:PrismaService,private readonly jwt:JwtService,private readonly config:ConfigService,private readonly emailService:EmailService){}
-  private hashToken(t:string){return createHash('sha256').update(t).digest('hex');}
-  private async signAccess(u:{id:string;email:string;companyId:string;role:string}){const jti=randomUUID();return this.jwt.signAsync({sub:u.id,email:u.email,companyId:u.companyId,role:u.role},{secret:this.config.get<string>('jwt.accessSecret')??process.env.JWT_ACCESS_SECRET??'dev-access',expiresIn:this.config.get<string>('jwt.accessExpiresIn')??'15m',jwtid:jti} as any);}
-  private async issueRefresh(userId:string,deviceId?:string,ua?:string,ip?:string){const raw=randomBytes(48).toString('hex');const row=await this.prisma.refreshSession.create({data:{userId,tokenHash:this.hashToken(raw),deviceId,userAgent:ua,ipAddress:ip,expiresAt:new Date(Date.now()+7*864e5)}});return {raw,id:row.id};}
-  private otpCode(){return String(randomInt(100000,999999));}
-  private defaultPlan():CompanyPlan{return 'free';}
-  private async tokensFor(user:any,deviceId?:string,ip?:string,ua?:string){const accessToken=await this.signAccess(user);const refresh=await this.issueRefresh(user.id,deviceId,ua,ip);return {accessToken,refreshToken:refresh.raw,refreshSessionId:refresh.id};}
-  private async revokeAllAndMark(userId:string){const now=new Date();await this.prisma.refreshSession.updateMany({where:{userId,revokedAt:null},data:{revokedAt:now}});await this.prisma.tokenBlacklist.create({data:{jti:`revoke:${userId}:${now.getTime()}:${randomUUID()}`,userId,expiresAt:new Date(now.getTime()+15*60*1000)}});}
-  private async blacklistAccessToken(accessToken?:string,userId?:string){if(!accessToken)return;try{const p:any=this.jwt.decode(accessToken);if(p?.jti&&p?.exp){await this.prisma.tokenBlacklist.upsert({where:{jti:p.jti},create:{jti:p.jti,userId:userId??p.sub,expiresAt:new Date(p.exp*1000)},update:{}});}}catch(_){} }
+  constructor(private readonly prisma: PrismaService, private readonly jwt: JwtService, private readonly config: ConfigService, private readonly emailService: EmailService) {}
 
-  async register(dto:RegisterDto,ip?:string){if(await this.prisma.user.findFirst({where:{email:dto.email}}))throw new BadRequestException('Email already registered');const passwordHash=await bcrypt.hash(dto.password,12);const company=await this.prisma.company.create({data:{companyName:dto.companyName,email:dto.email,phone:dto.phone??'',status:'active',plan:this.defaultPlan() as any} as any});const user=await this.prisma.user.create({data:{companyId:company.id,email:dto.email,name:dto.name,phone:dto.phone??'',role:'owner',passwordHash,status:'pending'} as any});const code=this.otpCode();await this.prisma.authOtp.create({data:{email:dto.email,code,purpose:'verify_email',expiresAt:new Date(Date.now()+15*60*1000)}});try{await this.emailService.sendPasswordResetOtp(dto.email,code);}catch(e:any){console.error('[register] email send failed',e?.message||e);}return {message:'Registered. Verify email to activate.',email:user.email,companyId:company.id,requiresVerification:true,...(process.env.NODE_ENV!=='production'?{devCode:code}:{})};}
-  async login(dto:LoginDto,ip?:string,ua?:string){const user=await this.prisma.user.findFirst({where:{email:dto.email,status:{not:'deleted'}}});if(!user)throw new UnauthorizedException('Invalid credentials');if(user.lockedUntil&&user.lockedUntil>new Date())throw new ForbiddenException(`Account locked until ${user.lockedUntil.toISOString()}`);const ok=await bcrypt.compare(dto.password,user.passwordHash);if(!ok){const fails=user.failedLoginCount+1;await this.prisma.user.update({where:{id:user.id},data:fails>=5?{failedLoginCount:0,lockedUntil:new Date(Date.now()+30*60*1000)}:{failedLoginCount:fails}});throw new UnauthorizedException('Invalid credentials');}await this.prisma.user.update({where:{id:user.id},data:{failedLoginCount:0,lockedUntil:null,lastLoginAt:new Date()}});if(user.status==='pending')throw new UnauthorizedException('Email not verified');if(user.status!=='active')throw new UnauthorizedException('Account not active');return {...await this.tokensFor(user,dto.deviceId,ip,ua),user:{id:user.id,email:user.email,name:user.name,role:user.role,companyId:user.companyId}};}
-  async refresh(dto:RefreshDto,ip?:string,ua?:string){const hash=this.hashToken(dto.refreshToken);const session=await this.prisma.refreshSession.findFirst({where:{tokenHash:hash},include:{user:true}});if(!session)throw new UnauthorizedException('Invalid refresh token');if(session.revokedAt){await this.revokeAllAndMark(session.userId);throw new UnauthorizedException('Refresh token reuse detected; all sessions revoked');}if(session.expiresAt<new Date())throw new UnauthorizedException('Refresh token expired');if(session.user.status==='deleted'||session.user.status==='suspended')throw new ForbiddenException('User disabled');if(session.deviceId&&dto.deviceId&&session.deviceId!==dto.deviceId)throw new UnauthorizedException('Device mismatch');const tokens=await this.tokensFor(session.user,dto.deviceId??session.deviceId??undefined,ip,ua);await this.prisma.refreshSession.update({where:{id:session.id},data:{revokedAt:new Date(),replacedById:tokens.refreshSessionId}});return {accessToken:tokens.accessToken,refreshToken:tokens.refreshToken};}
-  async logout(userId:string,dto:LogoutDto,accessToken?:string){if(dto.refreshToken){await this.prisma.refreshSession.updateMany({where:{userId,tokenHash:this.hashToken(dto.refreshToken),revokedAt:null},data:{revokedAt:new Date()}});}else if(dto.deviceId)await this.prisma.refreshSession.updateMany({where:{userId,deviceId:dto.deviceId,revokedAt:null},data:{revokedAt:new Date()}});else await this.prisma.refreshSession.updateMany({where:{userId,revokedAt:null},data:{revokedAt:new Date()}});await this.blacklistAccessToken(accessToken,userId);return {ok:true};}
-  async sessions(userId:string){return this.prisma.refreshSession.findMany({where:{userId,revokedAt:null,expiresAt:{gt:new Date()}},select:{id:true,deviceId:true,userAgent:true,ipAddress:true,expiresAt:true,createdAt:true},orderBy:{createdAt:'desc'}});}
-  async revokeSession(userId:string,sessionId:string){await this.prisma.refreshSession.updateMany({where:{id:sessionId,userId,revokedAt:null},data:{revokedAt:new Date()}});return {ok:true};}
-  async forgotPassword(dto:ForgotPasswordDto){const user=await this.prisma.user.findFirst({where:{email:dto.email}});if(user){const code=this.otpCode();await this.prisma.authOtp.create({data:{email:dto.email,code,purpose:'reset_password',expiresAt:new Date(Date.now()+15*60*1000)}});try{await this.emailService.sendPasswordResetOtp(dto.email,code);}catch(e:any){console.error('[forgot-password] email failed',e?.message||e);}}return {ok:true};}
-  async resetPassword(dto:ResetPasswordDto){const otp=await this.prisma.authOtp.findFirst({where:{email:dto.email,purpose:'reset_password',code:dto.code,usedAt:null,expiresAt:{gt:new Date()}},orderBy:{createdAt:'desc'}});if(!otp)throw new BadRequestException('Invalid or expired code');const user=await this.prisma.user.findFirst({where:{email:dto.email}});if(!user)throw new NotFoundException('User not found');await this.prisma.user.update({where:{id:user.id},data:{passwordHash:await bcrypt.hash(dto.newPassword,12),failedLoginCount:0,lockedUntil:null}});await this.prisma.authOtp.update({where:{id:otp.id},data:{usedAt:new Date()}});await this.revokeAllAndMark(user.id);return {ok:true};}
-  async verifyEmail(dto:VerifyEmailDto){const otp=await this.prisma.authOtp.findFirst({where:{email:dto.email,purpose:'verify_email',code:dto.code,usedAt:null,expiresAt:{gt:new Date()}},orderBy:{createdAt:'desc'}});if(!otp)throw new BadRequestException('Invalid or expired code');await this.prisma.user.updateMany({where:{email:dto.email},data:{emailVerifiedAt:new Date(),status:'active'}});await this.prisma.authOtp.update({where:{id:otp.id},data:{usedAt:new Date()}});return {ok:true};}
-  async changePassword(userId:string,currentPassword:string,newPassword:string){const user=await this.prisma.user.findFirst({where:{id:userId}});if(!user)throw new NotFoundException('User not found');if(!await bcrypt.compare(currentPassword,user.passwordHash))throw new UnauthorizedException('Current password incorrect');await this.prisma.user.update({where:{id:userId},data:{passwordHash:await bcrypt.hash(newPassword,12)}});await this.revokeAllAndMark(userId);return {ok:true};}
-  async listSessions(userId:string){return this.sessions(userId);}
-  async logoutAll(userId:string){await this.revokeAllAndMark(userId);return {ok:true};}
-  async acceptInvite(dto:{token:string;name:string;password:string}){const hash=this.hashToken(dto.token);const inv=await this.prisma.inviteToken.findFirst({where:{tokenHash:hash,usedAt:null,expiresAt:{gt:new Date()}}});if(!inv)throw new BadRequestException('Invalid or expired invite');await this.prisma.$transaction([this.prisma.user.update({where:{id:inv.userId},data:{passwordHash:await bcrypt.hash(dto.password,12),name:dto.name,status:'active',emailVerifiedAt:new Date()}}),this.prisma.inviteToken.update({where:{id:inv.id},data:{usedAt:new Date()}})]);return {ok:true};}
-  async revokeAllSessions(userId:string){await this.revokeAllAndMark(userId);return {revoked:true};}
+  private hashToken(t: string) { return createHash('sha256').update(t).digest('hex'); }
+
+  private async signAccess(u: { id: string; email: string; companyId: string; role: string }) {
+    const jti = randomUUID();
+    return this.jwt.signAsync(
+      { sub: u.id, email: u.email, companyId: u.companyId, role: u.role },
+      {
+        secret: this.config.get<string>('jwt.accessSecret') ?? process.env.JWT_ACCESS_SECRET ?? 'dev-access',
+        expiresIn: this.config.get<string>('jwt.accessExpiresIn') ?? '15m',
+        jwtid: jti,
+      } as any,
+    );
+  }
+
+  private async issueRefresh(userId: string, deviceId?: string, ua?: string, ip?: string) {
+    const raw = randomBytes(48).toString('hex');
+    const row = await this.prisma.refreshSession.create({
+      data: {
+        userId,
+        tokenHash: this.hashToken(raw),
+        deviceId,
+        userAgent: ua,
+        ipAddress: ip,
+        expiresAt: new Date(Date.now() + 7 * 864e5),
+      },
+    });
+    return { raw, id: row.id };
+  }
+
+  private otpCode() { return String(randomInt(100000, 999999)); }
+  private defaultPlan(): CompanyPlan { return 'free'; }
+
+  private async tokensFor(user: any, deviceId?: string, ip?: string, ua?: string) {
+    const accessToken = await this.signAccess(user);
+    const refresh = await this.issueRefresh(user.id, deviceId, ua, ip);
+    return { accessToken, refreshToken: refresh.raw, refreshSessionId: refresh.id };
+  }
+
+  private async revokeAllAndMark(userId: string) {
+    const now = new Date();
+    await this.prisma.refreshSession.updateMany({ where: { userId, revokedAt: null }, data: { revokedAt: now } });
+    await this.prisma.tokenBlacklist.create({
+      data: {
+        jti: `revoke:${userId}:${now.getTime()}:${randomUUID()}`,
+        userId,
+        expiresAt: new Date(now.getTime() + 15 * 60 * 1000),
+      },
+    });
+  }
+
+  private async blacklistAccessToken(accessToken?: string, userId?: string) {
+    if (!accessToken) return;
+    try {
+      const p: any = this.jwt.decode(accessToken);
+      if (p?.jti && p?.exp) {
+        await this.prisma.tokenBlacklist.upsert({
+          where: { jti: p.jti },
+          create: { jti: p.jti, userId: userId ?? p.sub, expiresAt: new Date(p.exp * 1000) },
+          update: {},
+        });
+      }
+    } catch (_) {}
+  }
+
+  private async assertPasswordNotReused(userId: string, newPassword: string) {
+    const recent = await this.prisma.passwordHistory.findMany({
+      where: { userId },
+      orderBy: { createdAt: 'desc' },
+      take: PASSWORD_HISTORY_LIMIT,
+    });
+    for (const entry of recent) {
+      if (await bcrypt.compare(newPassword, entry.passwordHash)) {
+        throw new BadRequestException(`Password was used recently. Choose a different password.`);
+      }
+    }
+  }
+
+  private async savePasswordHistory(userId: string, passwordHash: string) {
+    await this.prisma.passwordHistory.create({ data: { userId, passwordHash } });
+    const old = await this.prisma.passwordHistory.findMany({
+      where: { userId },
+      orderBy: { createdAt: 'desc' },
+      skip: PASSWORD_HISTORY_LIMIT,
+      select: { id: true },
+    });
+    if (old.length) await this.prisma.passwordHistory.deleteMany({ where: { id: { in: old.map((x) => x.id) } } });
+  }
+
+  async register(dto: RegisterDto, ip?: string) {
+    if (await this.prisma.user.findFirst({ where: { email: dto.email } })) throw new BadRequestException('Email already registered');
+    const passwordHash = await bcrypt.hash(dto.password, 12);
+    const code = this.otpCode();
+
+    const { company, user } = await this.prisma.$transaction(async (tx) => {
+      const company = await tx.company.create({
+        data: {
+          companyName: dto.companyName,
+          email: dto.email,
+          phone: dto.phone ?? '',
+          status: 'active',
+          plan: this.defaultPlan() as any,
+        } as any,
+      });
+      const user = await tx.user.create({
+        data: {
+          companyId: company.id,
+          email: dto.email,
+          name: dto.name,
+          phone: dto.phone ?? '',
+          role: 'owner',
+          passwordHash,
+          status: 'pending',
+        } as any,
+      });
+      await tx.authOtp.create({
+        data: {
+          email: dto.email,
+          code,
+          purpose: 'verify_email',
+          expiresAt: new Date(Date.now() + 15 * 60 * 1000),
+        },
+      });
+      await tx.passwordHistory.create({ data: { userId: user.id, passwordHash } });
+      return { company, user };
+    });
+
+    try {
+      await this.emailService.sendPasswordResetOtp(dto.email, code);
+    } catch (e: any) {
+      console.error('[register] email send failed', e?.message || e);
+    }
+
+    return {
+      message: 'Registered. Verify email to activate.',
+      email: user.email,
+      companyId: company.id,
+      requiresVerification: true,
+      ...(process.env.ALLOW_DEV_SECRETS === 'true' && process.env.NODE_ENV !== 'production' ? { devCode: code } : {}),
+    };
+  }
+
+  async login(dto: LoginDto, ip?: string, ua?: string) {
+    const user = await this.prisma.user.findFirst({ where: { email: dto.email, status: { not: 'deleted' } } });
+    if (!user) throw new UnauthorizedException('Invalid credentials');
+    if (user.lockedUntil && user.lockedUntil > new Date()) throw new ForbiddenException(`Account locked until ${user.lockedUntil.toISOString()}`);
+    const ok = await bcrypt.compare(dto.password, user.passwordHash);
+    if (!ok) {
+      const fails = user.failedLoginCount + 1;
+      await this.prisma.user.update({ where: { id: user.id }, data: fails >= 5 ? { failedLoginCount: 0, lockedUntil: new Date(Date.now() + 30 * 60 * 1000) } : { failedLoginCount: fails } });
+      throw new UnauthorizedException('Invalid credentials');
+    }
+    await this.prisma.user.update({ where: { id: user.id }, data: { failedLoginCount: 0, lockedUntil: null, lastLoginAt: new Date() } });
+    if (user.status === 'pending') throw new UnauthorizedException('Email not verified');
+    if (user.status !== 'active') throw new UnauthorizedException('Account not active');
+    return { ...await this.tokensFor(user, dto.deviceId, ip, ua), user: { id: user.id, email: user.email, name: user.name, role: user.role, companyId: user.companyId } };
+  }
+
+  async refresh(dto: RefreshDto, ip?: string, ua?: string) {
+    const hash = this.hashToken(dto.refreshToken);
+    const session = await this.prisma.refreshSession.findFirst({ where: { tokenHash: hash }, include: { user: true } });
+    if (!session) throw new UnauthorizedException('Invalid refresh token');
+    if (session.revokedAt) {
+      await this.revokeAllAndMark(session.userId);
+      throw new UnauthorizedException('Refresh token reuse detected; all sessions revoked');
+    }
+    if (session.expiresAt < new Date()) throw new UnauthorizedException('Refresh token expired');
+    if (session.user.status === 'deleted' || session.user.status === 'suspended') throw new ForbiddenException('User disabled');
+    if (session.deviceId && dto.deviceId && session.deviceId !== dto.deviceId) throw new UnauthorizedException('Device mismatch');
+    const tokens = await this.tokensFor(session.user, dto.deviceId ?? session.deviceId ?? undefined, ip, ua);
+    await this.prisma.refreshSession.update({ where: { id: session.id }, data: { revokedAt: new Date(), replacedById: tokens.refreshSessionId } });
+    return { accessToken: tokens.accessToken, refreshToken: tokens.refreshToken };
+  }
+
+  async logout(userId: string, dto: LogoutDto, accessToken?: string) {
+    if (dto.refreshToken) await this.prisma.refreshSession.updateMany({ where: { userId, tokenHash: this.hashToken(dto.refreshToken), revokedAt: null }, data: { revokedAt: new Date() } });
+    else if (dto.deviceId) await this.prisma.refreshSession.updateMany({ where: { userId, deviceId: dto.deviceId, revokedAt: null }, data: { revokedAt: new Date() } });
+    else await this.prisma.refreshSession.updateMany({ where: { userId, revokedAt: null }, data: { revokedAt: new Date() } });
+    await this.blacklistAccessToken(accessToken, userId);
+    return { ok: true };
+  }
+
+  async sessions(userId: string) {
+    return this.prisma.refreshSession.findMany({ where: { userId, revokedAt: null, expiresAt: { gt: new Date() } }, select: { id: true, deviceId: true, userAgent: true, ipAddress: true, expiresAt: true, createdAt: true }, orderBy: { createdAt: 'desc' } });
+  }
+
+  async revokeSession(userId: string, sessionId: string) {
+    await this.prisma.refreshSession.updateMany({ where: { id: sessionId, userId, revokedAt: null }, data: { revokedAt: new Date() } });
+    return { ok: true };
+  }
+
+  async forgotPassword(dto: ForgotPasswordDto) {
+    const user = await this.prisma.user.findFirst({ where: { email: dto.email } });
+    if (user) {
+      const code = this.otpCode();
+      await this.prisma.authOtp.create({ data: { email: dto.email, code, purpose: 'reset_password', expiresAt: new Date(Date.now() + 15 * 60 * 1000) } });
+      try { await this.emailService.sendPasswordResetOtp(dto.email, code); } catch (e: any) { console.error('[forgot-password] email failed', e?.message || e); }
+    }
+    return { ok: true };
+  }
+
+  async resetPassword(dto: ResetPasswordDto) {
+    const otp = await this.prisma.authOtp.findFirst({ where: { email: dto.email, purpose: 'reset_password', code: dto.code, usedAt: null, expiresAt: { gt: new Date() } }, orderBy: { createdAt: 'desc' } });
+    if (!otp) throw new BadRequestException('Invalid or expired code');
+    const user = await this.prisma.user.findFirst({ where: { email: dto.email } });
+    if (!user) throw new NotFoundException('User not found');
+    await this.assertPasswordNotReused(user.id, dto.newPassword);
+    const newHash = await bcrypt.hash(dto.newPassword, 12);
+    await this.prisma.$transaction(async (tx) => {
+      await tx.user.update({ where: { id: user.id }, data: { passwordHash: newHash, failedLoginCount: 0, lockedUntil: null } });
+      await tx.authOtp.update({ where: { id: otp.id }, data: { usedAt: new Date() } });
+      await tx.passwordHistory.create({ data: { userId: user.id, passwordHash: newHash } });
+      const old = await tx.passwordHistory.findMany({ where: { userId: user.id }, orderBy: { createdAt: 'desc' }, skip: PASSWORD_HISTORY_LIMIT, select: { id: true } });
+      if (old.length) await tx.passwordHistory.deleteMany({ where: { id: { in: old.map((x) => x.id) } } });
+    });
+    await this.revokeAllAndMark(user.id);
+    return { ok: true };
+  }
+
+  async verifyEmail(dto: VerifyEmailDto) {
+    const otp = await this.prisma.authOtp.findFirst({ where: { email: dto.email, purpose: 'verify_email', code: dto.code, usedAt: null, expiresAt: { gt: new Date() } }, orderBy: { createdAt: 'desc' } });
+    if (!otp) throw new BadRequestException('Invalid or expired code');
+    await this.prisma.user.updateMany({ where: { email: dto.email }, data: { emailVerifiedAt: new Date(), status: 'active' } });
+    await this.prisma.authOtp.update({ where: { id: otp.id }, data: { usedAt: new Date() } });
+    return { ok: true };
+  }
+
+  async changePassword(userId: string, currentPassword: string, newPassword: string) {
+    const user = await this.prisma.user.findFirst({ where: { id: userId } });
+    if (!user) throw new NotFoundException('User not found');
+    if (!await bcrypt.compare(currentPassword, user.passwordHash)) throw new UnauthorizedException('Current password incorrect');
+    if (await bcrypt.compare(newPassword, user.passwordHash)) throw new BadRequestException('New password must differ from current password');
+    await this.assertPasswordNotReused(userId, newPassword);
+    const newHash = await bcrypt.hash(newPassword, 12);
+    await this.prisma.$transaction(async (tx) => {
+      await tx.user.update({ where: { id: userId }, data: { passwordHash: newHash } });
+      await tx.passwordHistory.create({ data: { userId, passwordHash: newHash } });
+      const old = await tx.passwordHistory.findMany({ where: { userId }, orderBy: { createdAt: 'desc' }, skip: PASSWORD_HISTORY_LIMIT, select: { id: true } });
+      if (old.length) await tx.passwordHistory.deleteMany({ where: { id: { in: old.map((x) => x.id) } } });
+    });
+    await this.revokeAllAndMark(userId);
+    return { ok: true };
+  }
+
+  async listSessions(userId: string) { return this.sessions(userId); }
+  async logoutAll(userId: string) { await this.revokeAllAndMark(userId); return { ok: true }; }
+
+  async acceptInvite(dto: { token: string; name: string; password: string }) {
+    const hash = this.hashToken(dto.token);
+    const inv = await this.prisma.inviteToken.findFirst({ where: { tokenHash: hash, usedAt: null, expiresAt: { gt: new Date() } } });
+    if (!inv) throw new BadRequestException('Invalid or expired invite');
+    const newHash = await bcrypt.hash(dto.password, 12);
+    await this.assertPasswordNotReused(inv.userId, dto.password);
+    await this.prisma.$transaction(async (tx) => {
+      await tx.user.update({ where: { id: inv.userId }, data: { passwordHash: newHash, name: dto.name, status: 'active', emailVerifiedAt: new Date() } });
+      await tx.inviteToken.update({ where: { id: inv.id }, data: { usedAt: new Date() } });
+      await tx.passwordHistory.create({ data: { userId: inv.userId, passwordHash: newHash } });
+    });
+    return { ok: true };
+  }
+
+  async revokeAllSessions(userId: string) { await this.revokeAllAndMark(userId); return { revoked: true }; }
 }
