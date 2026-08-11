@@ -1,16 +1,13 @@
-﻿import '../../features/support/presentation/support_screen.dart';
-import '../../features/admin/presentation/owner_control_screen.dart';
-import '../../features/billing/presentation/billing_screen.dart';
-import '../../features/auth/presentation/sessions_screen.dart';
-import '../../features/auth/presentation/forgot_password_screen.dart';
-import '../../features/auth/presentation/reset_password_screen.dart';
-import '../../features/auth/presentation/verify_email_screen.dart';
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../shell/app_shell.dart';
 import '../storage/secure_storage.dart';
 import '../../features/auth/presentation/login_screen.dart';
 import '../../features/auth/presentation/register_screen.dart';
+import '../../features/auth/presentation/forgot_password_screen.dart';
+import '../../features/auth/presentation/reset_password_screen.dart';
+import '../../features/auth/presentation/verify_email_screen.dart';
+import '../../features/auth/presentation/sessions_screen.dart';
 import '../../features/dashboard/presentation/dashboard_screen.dart';
 import '../../features/orders/presentation/orders_screen.dart';
 import '../../features/scanner/presentation/scanner_screen.dart';
@@ -26,24 +23,47 @@ import '../../features/settings/presentation/settings_screen.dart';
 import '../../features/marketplace/presentation/marketplace_screen.dart';
 import '../../features/alerts/presentation/alerts_screen.dart';
 
+/// Placeholder for routes whose screens are not on this branch yet.
+class _PlaceholderScreen extends StatelessWidget {
+  const _PlaceholderScreen(this.title);
+  final String title;
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.construction, size: 48, color: Colors.orange.shade700),
+          const SizedBox(height: 12),
+          Text(title, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
+          const SizedBox(height: 8),
+          const Text('Coming soon on this branch', style: TextStyle(color: Colors.black54)),
+        ],
+      ),
+    );
+  }
+}
+
 final appRouter = GoRouter(
   initialLocation: '/dashboard',
   redirect: (context, state) async {
     final loggedIn = await SecureStorage.instance.hasToken();
     final path = state.uri.path;
-    final goingAuth = path == '/login' ||
-        path == '/register' ||
-        path == '/forgot-password' ||
-        path == '/reset-password' ||
-        path == '/verify-email';
-    if (!loggedIn && !goingAuth) return '/login';
+    const public = {
+      '/login',
+      '/register',
+      '/forgot-password',
+      '/reset-password',
+      '/verify-email',
+    };
+    if (!loggedIn && !public.contains(path)) return '/login';
     if (loggedIn && (path == '/login' || path == '/register')) return '/dashboard';
     return null;
   },
   routes: [
-    GoRoute(path: '/login', builder: (_, __) => const LoginScreen()),
-    GoRoute(path: '/register', builder: (_, __) => const RegisterScreen()),
-    GoRoute(path: '/forgot-password', builder: (_, __) => const ForgotPasswordScreen()),
+    GoRoute(path: '/login', builder: (_, _) => const LoginScreen()),
+    GoRoute(path: '/register', builder: (_, _) => const RegisterScreen()),
+    GoRoute(path: '/forgot-password', builder: (_, _) => const ForgotPasswordScreen()),
     GoRoute(
       path: '/reset-password',
       builder: (_, state) => ResetPasswordScreen(email: state.extra as String?),
@@ -58,25 +78,27 @@ final appRouter = GoRouter(
         child: child,
       ),
       routes: [
-        GoRoute(path: '/dashboard', builder: (_, __) => const DashboardScreen()),
-        GoRoute(path: '/orders', builder: (_, __) => const OrdersScreen()),
-        GoRoute(path: '/scanner', builder: (_, __) => const ScannerScreen()),
-        GoRoute(path: '/recording', builder: (_, __) => const RecordingScreen()),
-        GoRoute(path: '/dispatch', builder: (_, __) => const DispatchScreen()),
-        GoRoute(path: '/warehouses', builder: (_, __) => const WarehousesScreen()),
-        GoRoute(path: '/users', builder: (_, __) => const UsersScreen()),
-        GoRoute(path: '/analytics', builder: (_, __) => const AnalyticsScreen()),
-        GoRoute(path: '/returns', builder: (_, __) => const ReturnsScreen()),
-        GoRoute(path: '/evidence', builder: (_, __) => const EvidenceScreen()),
-        GoRoute(path: '/claims', builder: (_, __) => const ClaimsScreen()),
-        GoRoute(path: '/marketplace', builder: (_, __) => const MarketplaceScreen()),
-        GoRoute(path: '/alerts', builder: (_, __) => const AlertsScreen()),
-        GoRoute(path: '/admin', builder: (_, __) => const OwnerControlScreen()),
-        GoRoute(path: '/billing', builder: (_, __) => const BillingScreen()),
-        GoRoute(path: '/support', builder: (_, __) => const SupportScreen()),
-        GoRoute(path: '/settings', builder: (_, __) => const SettingsScreen()),
-        GoRoute(path: '/sessions', builder: (_, __) => const SessionsScreen()),
+        GoRoute(path: '/dashboard', builder: (_, _) => const DashboardScreen()),
+        GoRoute(path: '/orders', builder: (_, _) => const OrdersScreen()),
+        GoRoute(path: '/scanner', builder: (_, _) => const ScannerScreen()),
+        GoRoute(path: '/recording', builder: (_, _) => const RecordingScreen()),
+        GoRoute(path: '/dispatch', builder: (_, _) => const DispatchScreen()),
+        GoRoute(path: '/warehouses', builder: (_, _) => const WarehousesScreen()),
+        GoRoute(path: '/users', builder: (_, _) => const UsersScreen()),
+        GoRoute(path: '/analytics', builder: (_, _) => const AnalyticsScreen()),
+        GoRoute(path: '/returns', builder: (_, _) => const ReturnsScreen()),
+        GoRoute(path: '/evidence', builder: (_, _) => const EvidenceScreen()),
+        GoRoute(path: '/claims', builder: (_, _) => const ClaimsScreen()),
+        GoRoute(path: '/marketplace', builder: (_, _) => const MarketplaceScreen()),
+        GoRoute(path: '/alerts', builder: (_, _) => const AlertsScreen()),
+        GoRoute(path: '/settings', builder: (_, _) => const SettingsScreen()),
+        GoRoute(path: '/sessions', builder: (_, _) => const SessionsScreen()),
+        // Optional shell links — no real screens on this branch yet
+        GoRoute(path: '/admin', builder: (_, _) => const _PlaceholderScreen('Admin')),
+        GoRoute(path: '/billing', builder: (_, _) => const _PlaceholderScreen('Billing')),
+        GoRoute(path: '/support', builder: (_, _) => const _PlaceholderScreen('Support')),
       ],
     ),
   ],
 );
+
