@@ -112,4 +112,23 @@ export class RecordingsController {
       checksum: dto.checksum,
     });
   }
+
+  @Post(':id/pause')
+  pause(@CurrentUser() u: AuthenticatedUser, @Param('id') id: string) {
+    return this.recordings.pause(u.companyId, id);
+  }
+
+  @Post(':id/resume')
+  resume(@CurrentUser() u: AuthenticatedUser, @Param('id') id: string) {
+    return this.recordings.resume(u.companyId, id);
+  }
+
+  @Post(':id/checksum')
+  checksum(
+    @CurrentUser() u: AuthenticatedUser,
+    @Param('id') id: string,
+    @Body() body: { checksum: string; algorithm?: string; segmentIndex?: number },
+  ) {
+    return this.recordings.setChecksum(u.companyId, id, body);
+  }
 }

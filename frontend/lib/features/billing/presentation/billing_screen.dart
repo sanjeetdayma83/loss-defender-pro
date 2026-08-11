@@ -10,7 +10,7 @@ class BillingScreen extends StatefulWidget {
 }
 
 class _BillingScreenState extends State<BillingScreen> {
-  List<dynamic> _plans = [];
+  Map<String, dynamic>? _catalog;
   Map<String, dynamic>? _sub;
   bool _loading = true;
   String? _error;
@@ -26,13 +26,11 @@ class _BillingScreenState extends State<BillingScreen> {
     try {
       final plansRes = await ApiClient.instance.dio.get('/billing/plans');
       final subRes = await ApiClient.instance.dio.get('/billing/subscription');
-      final p = plansRes.data is Map && plansRes.data['data'] != null
-          ? plansRes.data['data'] : plansRes.data;
-      final s = subRes.data is Map && subRes.data['data'] != null
-          ? subRes.data['data'] : subRes.data;
+      final cat = plansRes.data is Map && plansRes.data['data'] != null ? plansRes.data['data'] : plansRes.data;
+      final sub = subRes.data is Map && subRes.data['data'] != null ? subRes.data['data'] : subRes.data;
       setState(() {
-        _plans = p is List ? p : [];
-        _sub = s is Map ? Map<String, dynamic>.from(s as Map) : null;
+        _catalog = cat is Map ? Map<String, dynamic>.from(cat as Map) : {};
+        _sub = sub is Map ? Map<String, dynamic>.from(sub as Map) : {};
         _loading = false;
       });
     } on DioException catch (e) {
@@ -43,19 +41,32 @@ class _BillingScreenState extends State<BillingScreen> {
     }
   }
 
-  Future<void> _choose(String planId) async {
+  Future<void> _checkout(String planId) async {
     try {
-      await ApiClient.instance.dio.patch('/billing/subscription', data: {'plan': planId});
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Plan set to $planId (no payment provider)')),
-        );
-      }
-      await _load();
+      final res = await ApiClient.instance.dio.post('/billing/checkout/plan', data: {'planId': planId});
+      final data = res.data is Map && res.data['data'] != null ? res.data['data'] : res.data;
+      final order = data is Map ? data['order'] : null;
+      if (!mounted) return;
+      final configured = order is Map && order['configured'] == true;
+      await showDialog(
+        context: context,
+        builder: (_) => AlertDialog(
+          title: Text(configured ? 'Razorpay order' : 'Checkout (keys not set)'),
+          content: Text(
+            configured
+                ? 'Order: ${order['id']}\nAmount paise: ${order['amount']}\nOpen Razorpay Checkout with KEY + order id.'
+                : 'RAZORPAY_KEY_ID not set. Mock order: ${order is Map ? order['id'] : order}\nAdd keys in backend .env then retry.',
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(context), child: const Text('OK')),
+          ],
+        ),
+      );
+      // Live: integrate razorpay_flutter with order['id'] + order['keyId']
     } on DioException catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(e.response?.data?['message']?.toString() ?? 'Failed')),
+          SnackBar(content: Text(e.response?.data?['message']?.toString() ?? 'Checkout failed')),
         );
       }
     }
@@ -63,66 +74,71 @@ class _BillingScreenState extends State<BillingScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final plan = _sub?['plan']?.toString() ?? 'free';
+    final plans = (_catalog?['plans'] is List) ? _catalog!['plans'] as List : [];
+    final packs = (_catalog?['scanPacks'] is List) ? _catalog!['scanPacks'] as List : [];
+    final current = _sub?['plan']?.toString() ?? 'free';
+
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
-        const Text('Plans & Billing', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
-        const SizedBox(height: 4),
-        Text('Current plan: $plan', style: const TextStyle(color: AppColors.textSecondary)),
-        if (_sub != null) ...[
-          const SizedBox(height: 8),
-          Text('Storage: ${_sub!['storageUsed'] ?? '—'} / ${_sub!['storageQuota'] ?? '—'}',
-              style: const TextStyle(fontSize: 13)),
-        ],
-        const SizedBox(height: 16),
+        const Text('Choose Your Plan', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+        Text('Current: $current · Razorpay: ${_catalog?['razorpayConfigured'] == true ? 'live' : 'keys pending'}',
+            style: const TextStyle(color: AppColors.textSecondary)),
         if (_loading) const LinearProgressIndicator(),
         if (_error != null) Text(_error!, style: const TextStyle(color: Colors.red)),
-        LayoutBuilder(builder: (context, c) {
-          final cross = c.maxWidth > 900 ? 3 : (c.maxWidth > 600 ? 2 : 1);
-          return GridView.builder(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: cross,
-              mainAxisSpacing: 12,
-              crossAxisSpacing: 12,
-              childAspectRatio: 0.95,
-            ),
-            itemCount: _plans.length,
-            itemBuilder: (_, i) {
-              final p = _plans[i] is Map ? Map<String, dynamic>.from(_plans[i] as Map) : <String, dynamic>{};
-              final id = p['id']?.toString() ?? '';
-              final isCurrent = id == plan;
-              return Card(
-                elevation: isCurrent ? 3 : 1,
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(p['name']?.toString() ?? id,
-                          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                      const SizedBox(height: 8),
-                      Text('Quota: ${p['storageQuota'] ?? '—'}', style: const TextStyle(fontSize: 12)),
-                      const Spacer(),
-                      SizedBox(
-                        width: double.infinity,
-                        child: FilledButton(
-                          onPressed: isCurrent ? null : () => _choose(id),
-                          child: Text(isCurrent ? 'Current Plan' : 'Choose Plan'),
-                        ),
-                      ),
-                    ],
+        const SizedBox(height: 16),
+        ...plans.map((raw) {
+          final p = raw is Map ? Map<String, dynamic>.from(raw as Map) : <String, dynamic>{};
+          final id = p['id']?.toString() ?? '';
+          final features = p['features'] is List ? p['features'] as List : [];
+          final isCurrent = id == current;
+          return Card(
+            margin: const EdgeInsets.only(bottom: 12),
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(p['name']?.toString() ?? id, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                  Text('₹${p['priceInr']} / ${p['intervalMonths']} months (₹${p['pricePerMonthInr']}/mo)',
+                      style: const TextStyle(fontSize: 16, color: AppColors.accent)),
+                  Text('${p['scans']} scans · ${p['validityDays']} days validity · ${p['videoRetentionDays']} days video',
+                      style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+                  const SizedBox(height: 8),
+                  ...features.map((f) => Padding(
+                        padding: const EdgeInsets.only(bottom: 2),
+                        child: Row(children: [
+                          const Icon(Icons.check_circle, size: 16, color: Colors.green),
+                          const SizedBox(width: 6),
+                          Expanded(child: Text('$f', style: const TextStyle(fontSize: 13))),
+                        ]),
+                      )),
+                  const SizedBox(height: 12),
+                  SizedBox(
+                    width: double.infinity,
+                    child: FilledButton(
+                      onPressed: isCurrent ? null : () => _checkout(id),
+                      child: Text(isCurrent ? 'Current Plan' : 'Choose Plan — Pay with Razorpay'),
+                    ),
                   ),
-                ),
-              );
-            },
+                ],
+              ),
+            ),
+          );
+        }),
+        const SizedBox(height: 8),
+        const Text('Overage scan packs', style: TextStyle(fontWeight: FontWeight.w600)),
+        ...packs.map((raw) {
+          final p = raw is Map ? Map<String, dynamic>.from(raw as Map) : <String, dynamic>{};
+          return ListTile(
+            title: Text('${p['scans']} scans'),
+            trailing: Text('₹${p['priceInr']}'),
+            subtitle: Text(p['id']?.toString() ?? ''),
           );
         }),
         const SizedBox(height: 12),
-        const Text('Payment provider (Razorpay/Stripe) not wired — plan field only.',
-            style: TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+        const Text('Payments secured by Razorpay. Keys: RAZORPAY_KEY_ID / RAZORPAY_KEY_SECRET in backend .env',
+            style: TextStyle(fontSize: 11, color: AppColors.textSecondary)),
       ],
     );
   }

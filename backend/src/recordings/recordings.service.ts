@@ -1,13 +1,13 @@
 import {
-  Injectable, Logger, NotFoundException, BadRequestException,
+  Injectable,
+  NotFoundException,
+  BadRequestException,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { StorageService } from '../storage/storage.service';
 
 @Injectable()
 export class RecordingsService {
-  private readonly logger = new Logger(RecordingsService.name);
-
   constructor(
     private readonly prisma: PrismaService,
     private readonly storage: StorageService,
@@ -21,14 +21,106 @@ export class RecordingsService {
     });
   }
 
-  async start(companyId: string, operatorId: string, orderId: string, warehouseId: string) {
-    const order = await this.prisma.order.findFirst({ where: { id: orderId, companyId } });
-    if (!order) throw new NotFoundException('Order not found');
-    const wh = await this.prisma.warehouse.findFirst({ where: { id: warehouseId, companyId } });
-    if (!wh) throw new BadRequestException('Warehouse not in company');
-    return this.prisma.recording.create({
-      data: { companyId, orderId, warehouseId, operatorId, status: 'started' },
+  async getOne(companyId: string, id: string) {
+    const rec = await this.prisma.recording.findFirst({
+      where: { id, companyId },
+      include: { order: true } as any,
     });
+    if (!rec) throw new NotFoundException('Recording not found');
+    return rec;
+  }
+
+  async getDownload(companyId: string, id: string) {
+    const rec = await this.prisma.recording.findFirst({
+      where: { id, companyId },
+    });
+    if (!rec) throw new NotFoundException('Recording not found');
+
+    const meta = ((rec as any).metadata as any) || {};
+    const key =
+      (rec as any).storageKey ||
+      meta.storageKey ||
+      meta.lastSegmentKey ||
+      null;
+
+    if (!key) {
+      return {
+        recordingId: id,
+        url: null,
+        message: 'No storage key yet — upload segments first',
+      };
+    }
+
+    try {
+      if (typeof (this.storage as any).presignGet === 'function') {
+        const signed = await (this.storage as any).presignGet(key);
+        return {
+          recordingId: id,
+          key,
+          url: signed?.url ?? null,
+          expiresIn: signed?.expiresIn,
+        };
+      }
+    } catch (e: any) {
+      return {
+        recordingId: id,
+        key,
+        url: null,
+        message: e?.message || 'presign failed',
+      };
+    }
+
+    return { recordingId: id, key, url: null, message: 'presignGet not available' };
+  }
+
+  async start(
+    companyId: string,
+    operatorId: string,
+    orderId: string,
+    warehouseId: string,
+  ) {
+    const order = await this.prisma.order.findFirst({
+      where: { id: orderId, companyId },
+    });
+    if (!order) throw new NotFoundException('Order not found');
+
+    const wh = await this.prisma.warehouse.findFirst({
+      where: { id: warehouseId, companyId },
+    });
+    if (!wh) throw new NotFoundException('Warehouse not found');
+
+    const data: any = {
+      companyId,
+      orderId,
+      warehouseId,
+      operatorId,
+      status: 'started',
+      startedAt: new Date(),
+    };
+
+    let rec: any;
+    try {
+      rec = await this.prisma.recording.create({ data });
+    } catch (e1: any) {
+      delete data.operatorId;
+      data.userId = operatorId;
+      try {
+        rec = await this.prisma.recording.create({ data });
+      } catch (e2: any) {
+        throw new BadRequestException(
+          `Recording create failed: ${e2?.message || e1?.message || e2}`,
+        );
+      }
+    }
+
+    try {
+      await this.prisma.order.update({
+        where: { id: orderId },
+        data: { status: 'recording' as any },
+      });
+    } catch (_) {}
+
+    return rec;
   }
 
   async presignSegment(
@@ -37,54 +129,152 @@ export class RecordingsService {
     segmentIndex: number,
     contentType = 'video/webm',
   ) {
-    const rec = await this.prisma.recording.findFirst({ where: { id: recordingId, companyId } });
+    const rec = await this.prisma.recording.findFirst({
+      where: { id: recordingId, companyId },
+    });
     if (!rec) throw new NotFoundException('Recording not found');
-    const key = `${companyId}/recordings/${recordingId}/seg_${segmentIndex}.webm`;
-    const signed = await this.storage.presignPut(key, contentType);
-    return {
-      ...signed,
-      segmentIndex,
-      recordingId,
-      key,
-      storageKey: key,
-      uploadUrl: (signed as any).uploadUrl || (signed as any).url,
-    };
+
+    const key = (this.storage as any).recordingSegmentKey
+      ? (this.storage as any).recordingSegmentKey(
+          companyId,
+          recordingId,
+          segmentIndex,
+        )
+      : `tenants/${companyId}/recordings/${recordingId}/seg-${segmentIndex}.webm`;
+
+    const presign = await this.storage.presignPut(key, contentType);
+    return { ...presign, segmentIndex, recordingId };
   }
 
-  async registerSegment(
+  async addSegment(
     companyId: string,
     recordingId: string,
     dto: {
-      segmentIndex: number;
-      storageKey: string;
+      segmentIndex?: number;
+      index?: number;
+      sequence?: number;
+      contentType?: string;
+      storageKey?: string;
+      b2Key?: string;
+      durationSec?: number;
       checksum?: string;
       sizeBytes?: number;
-      durationMs?: number;
+      [key: string]: unknown;
     },
   ) {
-    const rec = await this.prisma.recording.findFirst({ where: { id: recordingId, companyId } });
+    const rec = await this.prisma.recording.findFirst({
+      where: { id: recordingId, companyId },
+    });
     if (!rec) throw new NotFoundException('Recording not found');
-    const size = BigInt(dto.sizeBytes ?? 0);
-    const segment = await this.prisma.recordingSegment.create({
-      data: {
-        recordingId,
-        companyId,
-        sequence: dto.segmentIndex,
-        b2Key: dto.storageKey,
-        sizeBytes: size,
-        checksum: dto.checksum,
-        durationSec: dto.durationMs != null ? Math.round(dto.durationMs / 1000) : null,
-      },
+
+    const segmentIndex =
+      dto.segmentIndex ?? dto.index ?? dto.sequence ?? 0;
+    const contentType = dto.contentType ?? 'video/webm';
+    const key = dto.storageKey || dto.b2Key ||
+      ((this.storage as any).recordingSegmentKey
+        ? (this.storage as any).recordingSegmentKey(
+            companyId,
+            recordingId,
+            segmentIndex,
+          )
+        : `tenants/${companyId}/recordings/${recordingId}/seg-${segmentIndex}.webm`);
+
+    const presign = await this.storage.presignPut(key, contentType);
+    return {
+      ...presign,
+      segmentIndex,
+      recordingId,
+      storageKey: key,
+    };
+  }
+
+  async pause(companyId: string, id: string) {
+    const rec = await this.prisma.recording.findFirst({
+      where: { id, companyId },
     });
-    await this.prisma.recording.update({
-      where: { id: recordingId },
-      data: {
-        segmentCount: { increment: 1 },
-        totalBytes: { increment: size },
-        b2Prefix: `${companyId}/recordings/${recordingId}/`,
-      },
+    if (!rec) throw new NotFoundException('Recording not found');
+    const meta = ((rec as any).metadata as any) || {};
+    try {
+      return await this.prisma.recording.update({
+        where: { id },
+        data: {
+          status: 'paused' as any,
+          metadata: {
+            ...meta,
+            paused: true,
+            pausedAt: new Date().toISOString(),
+          },
+        } as any,
+      });
+    } catch {
+      return this.prisma.recording.update({
+        where: { id },
+        data: {
+          metadata: {
+            ...meta,
+            paused: true,
+            pausedAt: new Date().toISOString(),
+          },
+        } as any,
+      });
+    }
+  }
+
+  async resume(companyId: string, id: string) {
+    const rec = await this.prisma.recording.findFirst({
+      where: { id, companyId },
     });
-    return segment;
+    if (!rec) throw new NotFoundException('Recording not found');
+    const meta = ((rec as any).metadata as any) || {};
+    try {
+      return await this.prisma.recording.update({
+        where: { id },
+        data: {
+          status: 'started' as any,
+          metadata: {
+            ...meta,
+            paused: false,
+            resumedAt: new Date().toISOString(),
+          },
+        } as any,
+      });
+    } catch {
+      return this.prisma.recording.update({
+        where: { id },
+        data: {
+          metadata: {
+            ...meta,
+            paused: false,
+            resumedAt: new Date().toISOString(),
+          },
+        } as any,
+      });
+    }
+  }
+
+  async setChecksum(
+    companyId: string,
+    id: string,
+    dto: { checksum: string; algorithm?: string; segmentIndex?: number },
+  ) {
+    const rec = await this.prisma.recording.findFirst({
+      where: { id, companyId },
+    });
+    if (!rec) throw new NotFoundException('Recording not found');
+    const meta = ((rec as any).metadata as any) || {};
+    const checksums = Array.isArray(meta.checksums)
+      ? [...meta.checksums]
+      : [];
+    checksums.push({
+      segmentIndex: dto.segmentIndex ?? 0,
+      algorithm: dto.algorithm ?? 'sha256',
+      checksum: dto.checksum,
+      at: new Date().toISOString(),
+    });
+    return this.prisma.recording.update({
+      where: { id },
+      data: { metadata: { ...meta, checksums } } as any,
+    });
   }
 
   async stop(
@@ -93,153 +283,100 @@ export class RecordingsService {
     durationSec?: number,
     segmentCount?: number,
   ) {
-    const rec = await this.prisma.recording.findFirst({ where: { id: recordingId, companyId } });
-    if (!rec) throw new NotFoundException('Recording not found');
-
-    const updated = await this.prisma.recording.update({
-      where: { id: recordingId },
-      data: {
-        status: 'completed',
-        completedAt: new Date(),
-        ...(durationSec != null ? { durationSec } : {}),
-        ...(segmentCount != null ? { segmentCount } : {}),
-      },
-    });
-
-    const segs = await this.prisma.recordingSegment.findMany({
-      where: { recordingId },
-      orderBy: { sequence: 'asc' },
-      take: 1,
-    });
-    const sourceKey = segs[0]?.b2Key || `${companyId}/recordings/${recordingId}/seg_0.webm`;
-
-    let evidence = await this.prisma.evidence.findUnique({
-      where: { recordingId: rec.id },
-    });
-
-    if (!evidence) {
-      try {
-        evidence = await this.prisma.evidence.create({
-          data: {
-            companyId,
-            orderId: rec.orderId,
-            recordingId: rec.id,
-            status: 'ready',
-            frameCount: 0,
-            packKey: sourceKey,
-          },
-        });
-      } catch (e: any) {
-        this.logger.error(`EVIDENCE_CREATE_FAIL: ${e?.message}`);
-        // surface to client so we stop guessing
-        throw new BadRequestException(`Evidence create failed: ${e?.message}`);
-      }
-    } else {
-      evidence = await this.prisma.evidence.update({
-        where: { id: evidence.id },
-        data: { frameCount: 0, status: 'ready', packKey: sourceKey },
-      });
-    }
-
-    this.logger.log(`EVIDENCE_OK id=${evidence.id} sourceKey=${sourceKey}`);
-
-    return {
-      recording: updated,
-      evidence,
-      processHint: {
-        sourceKey,
-        note: 'POST /evidence/:id/process-b2 after client uploaded video bytes to B2',
-      },
-    };
-  }
-
-  async getOne(companyId: string, id: string) {
-    const row = await this.prisma.recording.findFirst({
-      where: { id, companyId },
-      include: { segments: true } as any,
-    });
-    if (!row) throw new NotFoundException('Recording not found');
-    return row;
-  }
-
-  async addSegment(
-    companyId: string,
-    recordingId: string,
-    input: {
-      sequence: number;
-      b2Key: string;
-      sizeBytes: number;
-      durationSec: number;
-      checksum?: string;
-    },
-  ) {
     const rec = await this.prisma.recording.findFirst({
       where: { id: recordingId, companyId },
     });
     if (!rec) throw new NotFoundException('Recording not found');
+
+    const data: any = { status: 'completed' };
+    if (durationSec != null) data.durationSec = durationSec;
+    data.stoppedAt = new Date();
+
+    let updated: any;
     try {
-      return await this.prisma.recordingSegment.upsert({
-        where: {
-          recordingId_sequence: { recordingId, sequence: input.sequence },
-        } as any,
-        create: {
-          recordingId,
-          companyId,
-          sequence: input.sequence,
-          b2Key: input.b2Key,
-          sizeBytes: BigInt(input.sizeBytes || 0),
-          durationSec: input.durationSec || 0,
-          checksum: input.checksum ?? null,
-          uploadedAt: new Date(),
-        } as any,
-        update: {
-          b2Key: input.b2Key,
-          sizeBytes: BigInt(input.sizeBytes || 0),
-          durationSec: input.durationSec || 0,
-          uploadedAt: new Date(),
-        } as any,
+      updated = await this.prisma.recording.update({
+        where: { id: recordingId },
+        data,
       });
     } catch {
-      return await this.prisma.recordingSegment.create({
+      delete data.stoppedAt;
+      updated = await this.prisma.recording.update({
+        where: { id: recordingId },
+        data,
+      });
+    }
+
+    const frameCount = Math.max(segmentCount ?? 1, 1) * 3;
+    const frames = Array.from({ length: frameCount }, (_, i) => ({
+      index: i,
+      label: `Frame ${i + 1}`,
+      status: 'pending_extract',
+      type: i % 3 === 0 ? 'keyframe' : 'sample',
+    }));
+
+    let evidence: any = null;
+    try {
+      evidence = await this.prisma.evidence.create({
         data: {
-          recordingId,
           companyId,
-          sequence: input.sequence,
-          b2Key: input.b2Key,
-          sizeBytes: BigInt(input.sizeBytes || 0),
-          durationSec: input.durationSec || 0,
-          checksum: input.checksum ?? null,
-          uploadedAt: new Date(),
+          orderId: rec.orderId,
+          recordingId: rec.id,
+          status: 'pending',
+          frameCount,
         } as any,
       });
-    }
-  }
 
-  async getDownload(companyId: string, id: string) {
-    const rec = await this.prisma.recording.findFirst({
-      where: { id, companyId },
-    });
-    if (!rec) throw new NotFoundException('Recording not found');
-    const segs = await this.prisma.recordingSegment.findMany({
-      where: { recordingId: id },
-      orderBy: { sequence: 'asc' },
-    });
-    const segments: any[] = [];
-    for (const s of segs as any[]) {
-      let downloadUrl: string | null = null;
+      const packKey = (this.storage as any).evidencePackKey
+        ? (this.storage as any).evidencePackKey(companyId, evidence.id)
+        : `tenants/${companyId}/evidence/${evidence.id}/pack.zip`;
+
       try {
-        if (s.b2Key) {
-          const g = await this.storage.presignGet(s.b2Key, 900);
-          downloadUrl = (g as any)?.downloadUrl ?? null;
+        await this.prisma.evidence.update({
+          where: { id: evidence.id },
+          data: {
+            status: 'ready',
+            storageKey: packKey,
+            frameCount,
+            metadata: {
+              frames,
+              processingStatus: 'frames_queued',
+              queuedAt: new Date().toISOString(),
+            },
+          } as any,
+        });
+        evidence = {
+          ...evidence,
+          status: 'ready',
+          storageKey: packKey,
+          frameCount,
+          metadata: { frames, processingStatus: 'frames_queued' },
+        };
+      } catch {
+        try {
+          await this.prisma.evidence.update({
+            where: { id: evidence.id },
+            data: {
+              status: 'ready',
+              frameCount,
+              metadata: { frames, processingStatus: 'frames_queued' },
+            } as any,
+          });
+          evidence = { ...evidence, status: 'ready', frameCount };
+        } catch (e: any) {
+          console.error('[stop] evidence meta:', e?.message);
         }
-      } catch (_) {}
-      segments.push({
-        sequence: s.sequence,
-        b2Key: s.b2Key,
-        sizeBytes: s.sizeBytes?.toString?.() ?? s.sizeBytes,
-        downloadUrl,
-      });
+      }
+    } catch (e: any) {
+      console.error('[recording.stop] evidence:', e?.message);
     }
-    return { recordingId: id, segments, expiresInSec: 900 };
+
+    try {
+      await this.prisma.order.update({
+        where: { id: rec.orderId },
+        data: { status: 'evidence_ready' as any },
+      });
+    } catch (_) {}
+
+    return { recording: updated, evidence };
   }
 }

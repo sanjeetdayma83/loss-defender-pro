@@ -34,7 +34,9 @@ class _AppShellState extends State<AppShell> {
     _Nav('/warehouses', 'Warehouses', Icons.warehouse_outlined, Icons.warehouse),
     _Nav('/marketplace', 'Marketplace', Icons.storefront_outlined, Icons.storefront),
     _Nav('/alerts', 'Alerts', Icons.notifications_outlined, Icons.notifications),
+    _Nav('/admin', 'Control Center', Icons.admin_panel_settings_outlined, Icons.admin_panel_settings),
     _Nav('/billing', 'Billing', Icons.credit_card_outlined, Icons.credit_card),
+    _Nav('/support', 'Help & Support', Icons.help_outline, Icons.help),
     _Nav('/settings', 'Settings', Icons.settings_outlined, Icons.settings),
   ];
 
