@@ -1,4 +1,5 @@
-﻿import {
+import { assertCanAddWarehouse } from '../common/utils/quota';
+import {
   Injectable,
   NotFoundException,
   ConflictException,
@@ -49,6 +50,7 @@ export class WarehousesService {
   }
 
   async create(companyId: string, actorId: string, dto: CreateWarehouseDto, ip?: string) {
+    await assertCanAddWarehouse(this.prisma as any, companyId);
     const exists = await this.prisma.warehouse.findFirst({
       where: { companyId, code: dto.code },
     });

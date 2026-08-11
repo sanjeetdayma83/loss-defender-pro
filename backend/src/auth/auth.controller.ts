@@ -121,7 +121,7 @@ export class AuthController {
   oauthProviders() {
     return {
       google: Boolean(process.env.GOOGLE_CLIENT_ID),
-      microsoft: Boolean(process.env.MICROSOFT_CLIENT_ID),
+      microsoft: false,
     };
   }
 }

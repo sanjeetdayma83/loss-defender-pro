@@ -1,4 +1,5 @@
-﻿import 'package:dio/dio.dart';
+import '../../../core/widgets/ui_kit.dart';
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import '../../../core/network/api_client.dart';
@@ -121,6 +122,13 @@ class _ScannerScreenState extends State<ScannerScreen> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           const Text('Scanner', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+          const SizedBox(height: 12),
+          KpiStrip(items: [
+            KpiItem('Orders', '${_orders.length}'),
+            KpiItem('Selected', _orderId == null ? 'None' : 'Yes', hint: _orderId == null ? 'pick order' : 'ready'),
+            KpiItem('Last', _lastResult == null || _lastResult!.isEmpty ? '—' : 'OK'),
+            KpiItem('Device', 'Camera', hint: 'live'),
+          ]),
           const SizedBox(height: 12),
           if (_loadingOrders)
             const LinearProgressIndicator()

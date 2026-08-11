@@ -70,37 +70,40 @@ export class AuthService {
     if (exists) throw new BadRequestException('Email already registered');
 
     const passwordHash = await bcrypt.hash(dto.password, 12);
-    const company = await this.prisma.company.create({
-      data: {
-        companyName: dto.companyName,
-        email: dto.email,
-        phone: dto.phone ?? '',
-        status: 'active',
-        plan: 'free' as any,
-      } as any,
-    });
-
-    const user = await this.prisma.user.create({
-      data: {
-        companyId: company.id,
-        email: dto.email,
-        name: dto.name,
-        phone: dto.phone ?? '',
-        role: 'owner',
-        passwordHash,
-        status: 'pending',
-      } as any,
-    });
-
     const code = this.otpCode();
-    await this.prisma.authOtp.create({
-      data: {
-        email: dto.email,
-        code,
-        purpose: 'verify_email',
-        expiresAt: new Date(Date.now() + 15 * 60 * 1000),
-      },
+
+    const { company, user } = await this.prisma.$transaction(async (tx) => {
+      const company = await tx.company.create({
+        data: {
+          companyName: dto.companyName,
+          email: dto.email,
+          phone: dto.phone ?? '',
+          status: 'active',
+          plan: 'free' as any,
+        } as any,
+      });
+      const user = await tx.user.create({
+        data: {
+          companyId: company.id,
+          email: dto.email,
+          name: dto.name,
+          phone: dto.phone ?? '',
+          role: 'owner',
+          passwordHash,
+          status: 'pending',
+        } as any,
+      });
+      await tx.authOtp.create({
+        data: {
+          email: dto.email,
+          code,
+          purpose: 'verify_email',
+          expiresAt: new Date(Date.now() + 15 * 60 * 1000),
+        },
+      });
+      return { company, user };
     });
+
     try {
       await this.emailService.sendPasswordResetOtp(dto.email, code);
     } catch (e: any) {

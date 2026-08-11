@@ -333,6 +333,16 @@ class _OrdersScreenState extends State<OrdersScreen> {
           ),
         ),
         const SizedBox(height: 16),
+                Padding(
+          padding: EdgeInsets.symmetric(horizontal: isWide ? 24 : 16),
+          child: KpiStrip(items: [
+            KpiItem('Total', '$total'),
+            KpiItem('Pending', '$pending'),
+            KpiItem('Exceptions', '$exceptions'),
+            KpiItem('Shipped', '$shipped'),
+          ]),
+        ),
+        const SizedBox(height: 12),
         // KPIs
         Padding(
           padding: EdgeInsets.symmetric(horizontal: isWide ? 24 : 16),
