@@ -7,6 +7,7 @@ import '../../features/auth/presentation/register_screen.dart';
 import '../../features/auth/presentation/forgot_password_screen.dart';
 import '../../features/auth/presentation/reset_password_screen.dart';
 import '../../features/auth/presentation/verify_email_screen.dart';
+import '../../features/auth/presentation/accept_invite_screen.dart';
 import '../../features/auth/presentation/sessions_screen.dart';
 import '../../features/dashboard/presentation/dashboard_screen.dart';
 import '../../features/orders/presentation/orders_screen.dart';
@@ -23,7 +24,6 @@ import '../../features/settings/presentation/settings_screen.dart';
 import '../../features/marketplace/presentation/marketplace_screen.dart';
 import '../../features/alerts/presentation/alerts_screen.dart';
 
-/// Placeholder for routes whose screens are not on this branch yet.
 class _PlaceholderScreen extends StatelessWidget {
   const _PlaceholderScreen(this.title);
   final String title;
@@ -55,6 +55,7 @@ final appRouter = GoRouter(
       '/forgot-password',
       '/reset-password',
       '/verify-email',
+      '/accept-invite',
     };
     if (!loggedIn && !public.contains(path)) return '/login';
     if (loggedIn && (path == '/login' || path == '/register')) return '/dashboard';
@@ -71,6 +72,12 @@ final appRouter = GoRouter(
     GoRoute(
       path: '/verify-email',
       builder: (_, state) => VerifyEmailScreen(email: state.extra as String?),
+    ),
+    GoRoute(
+      path: '/accept-invite',
+      builder: (_, state) => AcceptInviteScreen(
+        token: state.uri.queryParameters['token'] ?? state.extra as String?,
+      ),
     ),
     ShellRoute(
       builder: (context, state, child) => AppShell(
@@ -93,7 +100,6 @@ final appRouter = GoRouter(
         GoRoute(path: '/alerts', builder: (_, _) => const AlertsScreen()),
         GoRoute(path: '/settings', builder: (_, _) => const SettingsScreen()),
         GoRoute(path: '/sessions', builder: (_, _) => const SessionsScreen()),
-        // Optional shell links — no real screens on this branch yet
         GoRoute(path: '/admin', builder: (_, _) => const _PlaceholderScreen('Admin')),
         GoRoute(path: '/billing', builder: (_, _) => const _PlaceholderScreen('Billing')),
         GoRoute(path: '/support', builder: (_, _) => const _PlaceholderScreen('Support')),
@@ -101,4 +107,3 @@ final appRouter = GoRouter(
     ),
   ],
 );
-

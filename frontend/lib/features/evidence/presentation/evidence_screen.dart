@@ -1,3 +1,4 @@
+﻿import 'evidence_detail_page.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import '../../../core/network/api_client.dart';
@@ -33,6 +34,14 @@ class _EvidenceScreenState extends State<EvidenceScreen> {
     } finally {
       if (mounted) setState(() => _loading = false);
     }
+  }
+
+  void _openDetail(Map r) {
+    final id = r['id']?.toString();
+    if (id == null) return;
+    Navigator.of(context).push(MaterialPageRoute(
+      builder: (_) => EvidenceDetailPage(evidenceId: id, initial: Map<String, dynamic>.from(r)),
+    ));
   }
 
   @override
@@ -87,7 +96,12 @@ class _EvidenceScreenState extends State<EvidenceScreen> {
                             final id = e['id']?.toString() ?? '';
                             final short = id.length > 8 ? '${id.substring(0, 8)}…' : id;
                             final status = e['status']?.toString() ?? '';
-                            return Container(
+                            return Material(
+                              color: Colors.transparent,
+                              child: InkWell(
+                                borderRadius: BorderRadius.circular(12),
+                                onTap: () => _openDetail(e),
+                                child: Container(
                               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                               decoration: BoxDecoration(
                                 color: Colors.white,
@@ -128,6 +142,8 @@ class _EvidenceScreenState extends State<EvidenceScreen> {
                                   ),
                                 ],
                               ),
+                            ),
+                            ),
                             );
                           },
                         ),

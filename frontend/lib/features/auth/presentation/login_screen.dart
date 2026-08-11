@@ -1,4 +1,4 @@
-import 'dart:convert';
+﻿import 'dart:convert';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
@@ -518,9 +518,7 @@ class _FormPanel extends StatelessWidget {
                     Align(
                       alignment: Alignment.centerRight,
                       child: TextButton(
-                        onPressed: () {
-                          // TODO: forgot password route
-                        },
+                        onPressed: () => context.push('/forgot-password'),
                         child: const Text(
                           'Forgot Password?',
                           style: TextStyle(

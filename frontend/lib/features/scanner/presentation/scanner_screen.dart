@@ -1,5 +1,6 @@
-﻿import 'package:dio/dio.dart';
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
+import '../../recording/presentation/recording_session_page.dart';
 import '../../../core/network/api_client.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/app_dialogs.dart';
@@ -121,6 +122,7 @@ class _ScannerScreenState extends State<ScannerScreen> {
       final data = res.data is Map && res.data['data'] != null ? res.data['data'] : res.data;
       final result = data is Map ? data['result']?.toString() : null;
       setState(() => _lastResult = '$code → $result');
+      await _offerRecording();
 
       if (data is Map && data['order'] is Map) {
         _extractItems(Map<String, dynamic>.from(data['order'] as Map));
@@ -161,6 +163,39 @@ class _ScannerScreenState extends State<ScannerScreen> {
     final name = o['customerName'] ?? o['marketplaceOrderId'] ?? o['id'];
     final st = o['status'] ?? '';
     return '$name · $st';
+  }
+
+  
+    Future<void> _offerRecording() async {
+    final oid = _orderId;
+    if (oid == null || oid.isEmpty) return;
+    String? wh;
+    for (final o in _orders) {
+      if (o['id']?.toString() == oid) {
+        wh = o['warehouseId']?.toString();
+        if (wh == null && o['warehouse'] is Map) {
+          wh = o['warehouse']['id']?.toString();
+        }
+        break;
+      }
+    }
+    if (!mounted) return;
+    final go = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Scan successful'),
+        content: const Text('Start recording for this order?'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Later')),
+          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Start recording')),
+        ],
+      ),
+    );
+    if (go == true && mounted) {
+      await Navigator.of(context).push(MaterialPageRoute(
+        builder: (_) => RecordingSessionPage(orderId: oid, warehouseId: wh),
+      ));
+    }
   }
 
   @override
