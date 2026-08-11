@@ -15,18 +15,23 @@ const SENSITIVE = [
   'accessToken_raw',
 ];
 
-function strip(obj: any, allowDevSecrets: boolean): any {
+function strip(obj: any, allowDevSecrets: boolean, allowAuthTokens: boolean): any {
   if (obj == null || typeof obj !== 'object') return obj;
-  if (Array.isArray(obj)) return obj.map((v) => strip(v, allowDevSecrets));
+  if (Array.isArray(obj)) return obj.map((v) => strip(v, allowDevSecrets, allowAuthTokens));
+
   const out: any = {};
   for (const [k, v] of Object.entries(obj)) {
     const lower = k.toLowerCase();
-    const isDevSecret = ['devcode', 'temppassword', 'temporarypassword', 'invitetoken'].includes(lower);
-    if (SENSITIVE.some((field) => field.toLowerCase() === lower)) {
-      if (isDevSecret && allowDevSecrets) out[k] = strip(v, allowDevSecrets);
+    if (allowAuthTokens && (lower === 'accesstoken' || lower === 'refreshtoken')) {
+      out[k] = v;
       continue;
     }
-    out[k] = strip(v, allowDevSecrets);
+    const isDevSecret = ['devcode', 'temppassword', 'temporarypassword', 'invitetoken'].includes(lower);
+    if (SENSITIVE.some((field) => field.toLowerCase() === lower)) {
+      if (isDevSecret && allowDevSecrets) out[k] = strip(v, allowDevSecrets, allowAuthTokens);
+      continue;
+    }
+    out[k] = strip(v, allowDevSecrets, allowAuthTokens);
   }
   return out;
 }
@@ -42,12 +47,7 @@ export class SanitizeInterceptor implements NestInterceptor {
       process.env.NODE_ENV !== 'production';
 
     return next.handle().pipe(
-      map((data) => {
-        if (isAuthTokenRoute) {
-          return strip(data, allowDevSecrets);
-        }
-        return strip(data, allowDevSecrets);
-      }),
+      map((data) => strip(data, allowDevSecrets, isAuthTokenRoute)),
     );
   }
 }
