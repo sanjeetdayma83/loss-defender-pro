@@ -13,6 +13,7 @@ import { PermissionGuard } from './common/guards/permission.guard';
 import { CompaniesModule } from './companies/companies.module';
 import { WarehousesModule } from './warehouses/warehouses.module';
 import { UsersModule } from './users/users.module';
+import { StationsModule } from './stations/stations.module';
 import { OrdersModule } from './orders/orders.module';
 import { StorageModule } from './storage/storage.module';
 import { HealthModule } from './health/health.module';
@@ -50,6 +51,7 @@ import { BillingModule } from './billing/billing.module';
     WarehousesModule,
     UsersModule,
     OrdersModule,
+    StationsModule,
     StorageModule,
     HealthModule,
     RecordingsModule,
