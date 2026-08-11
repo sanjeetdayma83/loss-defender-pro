@@ -17,7 +17,7 @@ import { EmailModule } from '../email/email.module';
 @Module({
   imports: [PassportModule, JwtModule.register({}), EmailModule],
   controllers: [RbacController, AuthController],
-  providers: [GoogleOAuthService, OtpService, 
+  providers: [GoogleOAuthService, OtpService,
     AuthService,
     JwtStrategy,
     JwtRefreshStrategy,
@@ -25,6 +25,6 @@ import { EmailModule } from '../email/email.module';
     { provide: APP_GUARD, useClass: TenantGuard },
     { provide: APP_GUARD, useClass: RolesGuard },
   ],
-  exports: [AuthService],
+  exports: [AuthService, JwtModule],
 })
 export class AuthModule {}
