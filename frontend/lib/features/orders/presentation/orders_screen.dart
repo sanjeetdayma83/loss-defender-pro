@@ -2,7 +2,6 @@ import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import '../../../core/network/api_client.dart';
 import '../../../core/theme/app_theme.dart';
-import '../../../core/widgets/app_dialogs.dart';
 
 class OrdersScreen extends StatefulWidget {
   const OrdersScreen({super.key});
@@ -507,16 +506,12 @@ class _OrdersScreenState extends State<OrdersScreen> {
                                   IconButton(
                                     icon: const Icon(Icons.visibility_outlined,
                                         size: 18),
-                                    onPressed: () {
-                                      AppDialogs.info(context,
-                                          title: orderId,
-                                          message:
-                                              'Status: $status\nAWB: $awb\nWarehouse: ${whName ?? '—'}');
-                                    },
+                                    onPressed: () => _openDetail(o),
                                   ),
                                 ],
                               ),
-                            );
+                            ),
+                          );
                           },
                         ),
         ),
