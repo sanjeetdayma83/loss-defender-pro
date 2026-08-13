@@ -1,7 +1,9 @@
+import { SupportModule } from './support/support.module';
 import { Module, MiddlewareConsumer, NestModule } from '@nestjs/common';
 import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
 import { ConfigModule } from '@nestjs/config';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
+import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import { BullModule } from '@nestjs/bullmq';
 import configuration from './config/configuration';
 import { RequestIdMiddleware } from './common/middleware/request-id.middleware';
@@ -62,13 +64,14 @@ import { BillingModule } from './billing/billing.module';
     AlertsModule,
     MarketplaceModule,
     AnalyticsModule,
-    BillingModule,
+    BillingModule, SupportModule,
     NotificationsModule,
   ],
   providers: [
     { provide: APP_INTERCEPTOR, useClass: AuditInterceptor },
     { provide: APP_GUARD, useClass: ThrottlerGuard },
     { provide: APP_GUARD, useClass: PermissionGuard },
+    { provide: APP_GUARD, useClass: JwtAuthGuard },
   ],
 })
 export class AppModule implements NestModule {

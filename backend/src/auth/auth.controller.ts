@@ -19,7 +19,7 @@ export class AuthController {
   @Public() @Throttle({ default: { limit: 5, ttl: 60000 } }) @Post('register') @ApiOperation({ summary: 'Register company + owner' })
   register(@Body() dto: RegisterDto, @Req() req: Request) { return this.auth.register(dto, req.ip); }
 
-  @Public() @Throttle({ default: { limit: 10, ttl: 60000 } }) @Post('login')
+  @Public() @Throttle({ default: { limit: 5, ttl: 60000 } }) @Post('login')
   login(@Body() dto: LoginDto, @Req() req: Request) { return this.auth.login(dto, req.ip, req.headers['user-agent']); }
 
   @Public() @Throttle({ default: { limit: 20, ttl: 60000 } }) @Post('refresh')
