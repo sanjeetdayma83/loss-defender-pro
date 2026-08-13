@@ -1,3 +1,5 @@
+import { EvidenceService } from '../evidence/evidence.service';
+import { QUEUE_EVIDENCE } from '../queues/queue.constants';
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
@@ -10,7 +12,7 @@ const ALLOWED_VIDEO_TYPES = new Set(['video/webm', 'video/mp4', 'video/quicktime
 
 @Injectable()
 export class RecordingsService {
-  constructor(private readonly prisma: PrismaService, private readonly storage: StorageService, @InjectQueue('evidence') private readonly evidenceQueue: Queue) {}
+  constructor(private readonly prisma: PrismaService, private readonly storage: StorageService, private readonly evidence: EvidenceService, @InjectQueue(QUEUE_EVIDENCE) private readonly evidenceQueue: Queue) {}
 
   list(companyId: string) { return this.prisma.recording.findMany({ where: { companyId }, orderBy: { createdAt: 'desc' }, take: 100, include: { segments: { orderBy: { sequence: 'asc' } }, evidence: true } }); }
 
@@ -45,11 +47,51 @@ export class RecordingsService {
     const ordered = [...rec.segments].sort((a, b) => a.sequence - b.sequence);
     const aggregate = createHash('sha256');
     let totalBytes = 0;
-    for (const s of ordered) { totalBytes += Number(s.sizeBytes); aggregate.update(`${s.sequence}:${s.b2Key}:${s.sizeBytes}:${s.checksum || ''};`); }
-    const updated = await this.prisma.recording.update({ where: { id: recordingId }, data: { status: 'processing', completedAt: new Date(), durationSec, segmentCount: ordered.length, totalBytes: BigInt(totalBytes), checksum: aggregate.digest('hex'), b2Prefix: `${companyId}/recordings/${recordingId}/` } });
-    const evidence = await this.prisma.evidence.upsert({ where: { recordingId }, create: { companyId, orderId: rec.orderId, recordingId, status: 'pending', frameCount: 0 }, update: { status: 'pending', frameCount: 0 } });
-    await this.evidenceQueue.add('process-recording', { companyId, recordingId, evidenceId: evidence.id }, { jobId: `recording:${recordingId}`, attempts: 5, backoff: { type: 'exponential', delay: 5000 }, removeOnComplete: 1000, removeOnFail: 5000 });
-    return { recording: updated, evidence, queued: true };
+    for (const s of ordered) {
+      totalBytes += Number(s.sizeBytes);
+      aggregate.update(`${s.sequence}:${s.b2Key}:${s.sizeBytes}:${s.checksum || ''};`);
+    }
+    const updated = await this.prisma.recording.update({
+      where: { id: recordingId },
+      data: {
+        status: 'processing',
+        completedAt: new Date(),
+        durationSec,
+        segmentCount: ordered.length,
+        totalBytes: BigInt(totalBytes),
+        checksum: aggregate.digest('hex'),
+        b2Prefix: `${companyId}/recordings/${recordingId}/`,
+      },
+    });
+    let evidence = await this.prisma.evidence.upsert({
+      where: { recordingId },
+      create: { companyId, orderId: rec.orderId, recordingId, status: 'pending', frameCount: 0 },
+      update: { status: 'pending', frameCount: 0 },
+    });
+    let queued = false;
+    try {
+      if (this.evidenceQueue) {
+        await this.evidenceQueue.add(
+          'process-recording',
+          { companyId, recordingId, evidenceId: evidence.id },
+          { jobId: `recording:${recordingId}:${Date.now()}`, attempts: 5, backoff: { type: 'exponential', delay: 5000 }, removeOnComplete: 1000, removeOnFail: 5000 },
+        );
+        queued = true;
+      }
+    } catch (e: any) {
+      console.warn('[recordings.stop] queue skip:', e?.message || e);
+    }
+    if (!queued) {
+      try {
+        await this.evidence.processRecordingEvidence(companyId, recordingId, evidence.id);
+        const refreshed = await this.prisma.evidence.findFirst({ where: { id: evidence.id } });
+        if (refreshed) evidence = refreshed as any;
+      } catch (e2: any) {
+        console.warn('[recordings.stop] inline process failed:', e2?.message || e2);
+      }
+    }
+    const recOut: any = { ...updated, totalBytes: String((updated as any).totalBytes ?? totalBytes) };
+    return { recording: recOut, evidence, queued };
   }
 
   async presignSegment(companyId: string, recordingId: string, segmentIndex: number, contentType = 'video/webm') {
@@ -68,7 +110,7 @@ export class RecordingsService {
     const rec = await this.prisma.recording.findFirst({ where: { id: recordingId, companyId } });
     if (!rec) throw new NotFoundException('Recording not found');
     if (!this.storage.isConfigured()) throw new BadRequestException('B2 storage is not configured');
-    if (!b2Key.startsWith(`${companyId}/recordings/${recordingId}/`)) throw new BadRequestException('Segment key does not belong to this recording');
+    if (!b2Key.startsWith(`${companyId}/`) || !b2Key.includes(`/${recordingId}/`)) throw new BadRequestException('Segment key does not belong to this recording');
     const body = await this.storage.downloadBuffer(b2Key);
     if (body.length < 1 || body.length > MAX_SEGMENT_BYTES) throw new BadRequestException('Segment exceeds maximum allowed size');
     if (sizeBytes != null && sizeBytes !== body.length) throw new BadRequestException('Segment size mismatch');
