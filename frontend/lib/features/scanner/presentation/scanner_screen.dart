@@ -1,6 +1,7 @@
 import '../../../core/widgets/ui_kit.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import '../../../core/network/api_client.dart';
 import '../../../core/theme/app_theme.dart';
@@ -20,6 +21,8 @@ class _ScannerScreenState extends State<ScannerScreen> {
   bool _cameraOn = false;
   bool _busy = false;
   String? _lastResult;
+  Map<String, dynamic>? _selectedOrder;
+  String? _expectedSkuHint;
 
   final _controller = MobileScannerController(
     detectionSpeed: DetectionSpeed.normal,
@@ -52,7 +55,6 @@ class _ScannerScreenState extends State<ScannerScreen> {
             return ['packing', 'queued', 'synced', 'recording', 'scanned'].contains(s);
           })
           .toList();
-      // fallback: show all if none scannable
       final all = (data is List ? data : <dynamic>[])
           .whereType<Map>()
           .map((e) => Map<String, dynamic>.from(e))
@@ -61,6 +63,7 @@ class _ScannerScreenState extends State<ScannerScreen> {
         _orders = list.isNotEmpty ? list : all;
         if (_orders.isNotEmpty && _orderId == null) {
           _orderId = _orders.first['id']?.toString();
+          _updateExpectedSkuHint();
         }
         _loadingOrders = false;
       });
@@ -68,6 +71,24 @@ class _ScannerScreenState extends State<ScannerScreen> {
       setState(() => _loadingOrders = false);
       if (mounted) {
         AppDialogs.error(context, message: e.response?.data?['message']?.toString() ?? e.message ?? 'Orders failed');
+      }
+    }
+  }
+
+  void _updateExpectedSkuHint() {
+    if (_orderId == null) {
+      setState(() => _expectedSkuHint = null);
+      return;
+    }
+    final order = _orders.firstWhere((o) => o['id']?.toString() == _orderId, orElse: () => <String, dynamic>{});
+    if (order.isNotEmpty) {
+      final items = order['items'] as List<dynamic>? ?? [];
+      final pendingItems = items.where((i) => (i['scannedQty'] ?? 0) < (i['qty'] ?? 0)).toList();
+      if (pendingItems.isNotEmpty) {
+        final nextItem = pendingItems.first;
+        setState(() => _expectedSkuHint = 'Expected SKU: ${nextItem['sku'] ?? nextItem['barcode'] ?? '—'} (${(nextItem['scannedQty'] ?? 0)}/${nextItem['qty']})');
+      } else {
+        setState(() => _expectedSkuHint = 'All items scanned');
       }
     }
   }
@@ -83,13 +104,28 @@ class _ScannerScreenState extends State<ScannerScreen> {
       final res = await ApiClient.instance.dio.post('/scanner/scan', data: {
         'orderId': _orderId,
         'barcode': barcode,
-        'source': 'camera',
+        if (_expectedSkuHint != null && _expectedSkuHint!.contains('Expected SKU:')) 'expectedSku': _expectedSkuHint!.split('Expected SKU: ')[1].split(' ')[0],
       });
       final data = res.data is Map && res.data['data'] != null ? res.data['data'] : res.data;
       final result = data is Map ? data['result']?.toString() : null;
+      final scan = data is Map ? data['scan'] : null;
+      final alert = data is Map ? data['alert'] : null;
+      final allMatched = scan is Map ? scan['allMatched'] == true : false;
+
       setState(() => _lastResult = '$barcode → $result');
+
       if (result == 'matched') {
         await AppDialogs.success(context, message: 'Matched: $barcode');
+        _loadOrders();
+        // Navigate to Recording if all items matched
+        if (allMatched && mounted) {
+          final orderId = _orderId;
+          if (orderId != null) {
+            context.push('/recording/session?orderId=$orderId');
+          }
+        }
+      } else if (alert != null) {
+        await AppDialogs.info(context, title: 'Scan Alert', message: '${alert['message']} — $barcode');
       } else {
         await AppDialogs.info(context, title: 'Scan', message: '$result — $barcode');
       }
@@ -146,8 +182,29 @@ class _ScannerScreenState extends State<ScannerScreen> {
                         child: Text(_label(o), overflow: TextOverflow.ellipsis),
                       ))
                   .toList(),
-              onChanged: (v) => setState(() => _orderId = v),
+              onChanged: (v) {
+                setState(() => _orderId = v);
+                _updateExpectedSkuHint();
+              },
             ),
+          if (_expectedSkuHint != null) ...[
+            const SizedBox(height: 8),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: AppColors.accent.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: AppColors.accent.withOpacity(0.3)),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.info_outline, color: AppColors.accent, size: 18),
+                  const SizedBox(width: 8),
+                  Expanded(child: Text(_expectedSkuHint!, style: TextStyle(color: AppColors.accent, fontWeight: FontWeight.w600))),
+                ],
+              ),
+            ),
+          ],
           const SizedBox(height: 8),
           Row(
             children: [

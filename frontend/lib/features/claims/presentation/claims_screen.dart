@@ -15,6 +15,7 @@ class _ClaimsScreenState extends State<ClaimsScreen> {
   List<dynamic> _orders = [];
   bool _loading = true;
   String? _error;
+  String _tab = 'all';
 
   @override
   void initState() {
@@ -47,10 +48,29 @@ class _ClaimsScreenState extends State<ClaimsScreen> {
     }
   }
 
+  List<dynamic> get _filtered {
+    var list = _list;
+    switch (_tab) {
+      case 'open':
+        return list.where((c) => (c['status']?.toString() ?? 'open') == 'open').toList();
+      case 'under_review':
+        return list.where((c) => (c['status']?.toString() ?? '') == 'under_review').toList();
+      case 'approved':
+        return list.where((c) => (c['status']?.toString() ?? '') == 'approved').toList();
+      case 'rejected':
+        return list.where((c) => (c['status']?.toString() ?? '') == 'rejected').toList();
+      case 'closed':
+        return list.where((c) => (c['status']?.toString() ?? '') == 'closed').toList();
+      default:
+        return list;
+    }
+  }
+
   Future<void> _create() async {
-    final titleCtrl = TextEditingController();
     final reasonCtrl = TextEditingController();
+    final descriptionCtrl = TextEditingController();
     String? orderId;
+    String? marketplace;
 
     final ok = await showDialog<bool>(
       context: context,
@@ -59,30 +79,43 @@ class _ClaimsScreenState extends State<ClaimsScreen> {
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
           title: const Text('New Claim', style: TextStyle(fontWeight: FontWeight.w700)),
           content: SizedBox(
-            width: 400,
+            width: 420,
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                TextField(controller: titleCtrl, decoration: const InputDecoration(labelText: 'Title *')),
-                const SizedBox(height: 12),
-                TextField(controller: reasonCtrl, decoration: const InputDecoration(labelText: 'Reason')),
-                const SizedBox(height: 12),
                 if (_orders.isNotEmpty)
                   DropdownButtonFormField<String>(
                     value: orderId,
-                    decoration: const InputDecoration(labelText: 'Order (optional)'),
+                    decoration: const InputDecoration(labelText: 'Order *', border: OutlineInputBorder()),
                     items: [
-                      const DropdownMenuItem(value: null, child: Text('— None —')),
+                      const DropdownMenuItem(value: null, child: Text('— Select Order —')),
                       ..._orders.map((o) {
                         final m = o as Map;
                         return DropdownMenuItem(
                           value: m['id']?.toString(),
-                          child: Text(m['customerName']?.toString() ?? m['id']?.toString() ?? ''),
+                          child: Text('${m['marketplaceOrderId'] ?? m['customerName'] ?? m['id']}'),
                         );
                       }),
                     ],
                     onChanged: (v) => setLocal(() => orderId = v),
+                    validator: (v) => v == null ? 'Order is required' : null,
                   ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: reasonCtrl,
+                  decoration: const InputDecoration(labelText: 'Reason *', border: OutlineInputBorder()),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: descriptionCtrl,
+                  decoration: const InputDecoration(labelText: 'Description', border: OutlineInputBorder()),
+                  maxLines: 2,
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  onChanged: (v) => setLocal(() => marketplace = v),
+                  decoration: const InputDecoration(labelText: 'Marketplace (optional)', border: OutlineInputBorder()),
+                ),
               ],
             ),
           ),
@@ -94,12 +127,19 @@ class _ClaimsScreenState extends State<ClaimsScreen> {
       }),
     );
 
-    if (ok != true || titleCtrl.text.trim().isEmpty) return;
+    if (ok != true || reasonCtrl.text.trim().isEmpty || orderId == null) {
+      if (orderId == null && ok == true) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Order is required')));
+      }
+      return;
+    }
+
     try {
       await ApiClient.instance.dio.post('/claims', data: {
-        'title': titleCtrl.text.trim(),
-        if (reasonCtrl.text.trim().isNotEmpty) 'reason': reasonCtrl.text.trim(),
-        if (orderId != null) 'orderId': orderId,
+        'orderId': orderId,
+        'reason': reasonCtrl.text.trim(),
+        if (descriptionCtrl.text.trim().isNotEmpty) 'description': descriptionCtrl.text.trim(),
+        if (marketplace != null && marketplace!.isNotEmpty) 'marketplace': marketplace,
       });
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Claim created')));
@@ -108,15 +148,101 @@ class _ClaimsScreenState extends State<ClaimsScreen> {
     } on DioException catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(e.message ?? 'Failed'), backgroundColor: AppColors.danger),
+          SnackBar(content: Text(e.response?.data?['message']?.toString() ?? e.message ?? 'Failed'), backgroundColor: AppColors.danger),
         );
       }
     }
   }
 
+  Future<void> _updateStatus(Map<String, dynamic> claim, String newStatus, {String? decisionNote}) async {
+    try {
+      await ApiClient.instance.dio.patch('/claims/${claim['id']}', data: {
+        'status': newStatus,
+        if (decisionNote != null) 'decisionNote': decisionNote,
+      });
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Claim $newStatus')));
+        _load();
+      }
+    } on DioException catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(e.response?.data?['message']?.toString() ?? e.message ?? 'Failed'), backgroundColor: AppColors.danger),
+        );
+      }
+    }
+  }
+
+  void _showStatusDialog(Map<String, dynamic> claim) {
+    final currentStatus = claim['status']?.toString() ?? 'open';
+    final allowed = {
+      'open': ['under_review', 'approved', 'rejected', 'closed'],
+      'under_review': ['approved', 'rejected', 'closed'],
+      'approved': ['closed'],
+      'rejected': ['closed'],
+      'closed': [],
+      'pending': ['under_review', 'approved', 'rejected', 'closed'],
+    }[currentStatus] ?? [];
+
+    final decisionCtrl = TextEditingController();
+    String? selectedStatus;
+
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(builder: (ctx, setLocal) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: Text('Update Claim Status', style: const TextStyle(fontWeight: FontWeight.w700)),
+          content: SizedBox(
+            width: 400,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text('Current: $currentStatus', style: const TextStyle(fontWeight: FontWeight.w600)),
+                const SizedBox(height: 12),
+                if (allowed.isNotEmpty)
+                  DropdownButtonFormField<String>(
+                    value: selectedStatus,
+                    decoration: const InputDecoration(labelText: 'New Status *', border: OutlineInputBorder()),
+                    items: allowed.map((s) => DropdownMenuItem(value: s, child: Text(s))).toList(),
+                    onChanged: (v) => setLocal(() => selectedStatus = v),
+                  ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: decisionCtrl,
+                  decoration: const InputDecoration(labelText: 'Decision Note (optional)', border: OutlineInputBorder()),
+                  maxLines: 3,
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+            FilledButton(
+              onPressed: selectedStatus == null
+                  ? null
+                  : () {
+                      Navigator.pop(ctx);
+                      _updateStatus(claim, selectedStatus!, decisionNote: decisionCtrl.text.trim().isNotEmpty ? decisionCtrl.text.trim() : null);
+                    },
+              child: const Text('Update'),
+            ),
+          ],
+        );
+      }),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final isWide = MediaQuery.of(context).size.width >= 700;
+    final filtered = _filtered;
+    final openCount = _list.where((c) => (c['status']?.toString() ?? 'open') == 'open').length;
+    final reviewCount = _list.where((c) => (c['status']?.toString() ?? '') == 'under_review').length;
+    final approvedCount = _list.where((c) => (c['status']?.toString() ?? '') == 'approved').length;
+    final rejectedCount = _list.where((c) => (c['status']?.toString() ?? '') == 'rejected').length;
+    final closedCount = _list.where((c) => (c['status']?.toString() ?? '') == 'closed').length;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -130,8 +256,7 @@ class _ClaimsScreenState extends State<ClaimsScreen> {
                   children: [
                     Text('Claims Management', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700)),
                     SizedBox(height: 2),
-                    Text('Track and resolve customer claims',
-                        style: TextStyle(fontSize: 13, color: AppColors.textSecondary)),
+                    Text('Track and resolve customer claims', style: TextStyle(fontSize: 13, color: AppColors.textSecondary)),
                   ],
                 ),
               ),
@@ -146,19 +271,36 @@ class _ClaimsScreenState extends State<ClaimsScreen> {
           ),
         ),
         const SizedBox(height: 12),
+        Padding(
+          padding: EdgeInsets.symmetric(horizontal: isWide ? 24 : 16),
+          child: SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: [
+                _TabChip('All (${_list.length})', 'all'),
+                _TabChip('Open ($openCount)', 'open'),
+                _TabChip('Under Review ($reviewCount)', 'under_review'),
+                _TabChip('Approved ($approvedCount)', 'approved'),
+                _TabChip('Rejected ($rejectedCount)', 'rejected'),
+                _TabChip('Closed ($closedCount)', 'closed'),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: 8),
         Expanded(
           child: _loading
               ? const Center(child: CircularProgressIndicator())
               : _error != null
                   ? Center(child: Text(_error!, style: const TextStyle(color: AppColors.danger)))
-                  : _list.isEmpty
+                  : filtered.isEmpty
                       ? const Center(child: Text('No claims yet', style: TextStyle(fontWeight: FontWeight.w600)))
                       : ListView.separated(
                           padding: EdgeInsets.all(isWide ? 24 : 16),
-                          itemCount: _list.length,
+                          itemCount: filtered.length,
                           separatorBuilder: (_, __) => const SizedBox(height: 8),
                           itemBuilder: (context, i) {
-                            final c = _list[i] as Map<String, dynamic>;
+                            final c = filtered[i] as Map<String, dynamic>;
                             final status = c['status']?.toString() ?? 'open';
                             return Container(
                               padding: const EdgeInsets.all(16),
@@ -173,22 +315,27 @@ class _ClaimsScreenState extends State<ClaimsScreen> {
                                     child: Column(
                                       crossAxisAlignment: CrossAxisAlignment.start,
                                       children: [
-                                        Text(c['title']?.toString() ?? c['reason']?.toString() ?? 'Claim',
-                                            style: const TextStyle(fontWeight: FontWeight.w600)),
+                                        Text(c['title']?.toString() ?? c['reason']?.toString() ?? 'Claim', style: const TextStyle(fontWeight: FontWeight.w600)),
                                         if (c['reason'] != null)
-                                          Text(c['reason'].toString(),
-                                              style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+                                          Text(c['reason'].toString(), style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+                                        if (c['orderId'] != null)
+                                          Text('Order: ${c['orderId']}', style: const TextStyle(fontSize: 11, color: AppColors.textSecondary)),
                                       ],
                                     ),
                                   ),
                                   Container(
                                     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                                     decoration: BoxDecoration(
-                                      color: status == 'open' ? AppColors.warning : AppColors.success,
+                                      color: status == 'open' ? AppColors.warning : (status == 'closed' || status == 'approved' || status == 'rejected' ? AppColors.success : AppColors.accent),
                                       borderRadius: BorderRadius.circular(20),
                                     ),
-                                    child: Text(status,
-                                        style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w600)),
+                                    child: Text(status, style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w600)),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  IconButton(
+                                    icon: const Icon(Icons.edit_outlined, size: 18),
+                                    onPressed: () => _showStatusDialog(c),
+                                    tooltip: 'Update Status',
                                   ),
                                 ],
                               ),
@@ -197,6 +344,24 @@ class _ClaimsScreenState extends State<ClaimsScreen> {
                         ),
         ),
       ],
+    );
+  }
+
+  Widget _TabChip(String label, String key) {
+    final sel = _tab == key;
+    return Padding(
+      padding: const EdgeInsets.only(right: 8),
+      child: InkWell(
+        onTap: () => setState(() => _tab = key),
+        borderRadius: BorderRadius.circular(8),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+          decoration: BoxDecoration(
+            border: Border(bottom: BorderSide(color: sel ? const Color(0xFF2563EB) : Colors.transparent, width: 2)),
+          ),
+          child: Text(label, style: TextStyle(fontSize: 13, fontWeight: sel ? FontWeight.w700 : FontWeight.w500, color: sel ? const Color(0xFF2563EB) : AppColors.textSecondary)),
+        ),
+      ),
     );
   }
 }
