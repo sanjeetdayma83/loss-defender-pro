@@ -2,6 +2,7 @@
 import 'package:flutter/material.dart';
 import '../../../core/network/api_client.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/config/feature_flags.dart';
 
 class BillingScreen extends StatefulWidget {
   const BillingScreen({super.key});
@@ -74,6 +75,27 @@ class _BillingScreenState extends State<BillingScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // Hide billing if feature is disabled
+    final billingEnabled = isFeatureEnabled('billing.enabled');
+    if (!billingEnabled) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.account_balance_wallet_outlined, size: 64, color: AppColors.textSecondary.withOpacity(0.4)),
+            const SizedBox(height: 16),
+            const Text('Billing', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 8),
+            Text(
+              FeatureFlags.getFeatureInfo('billing.enabled')?['reason'] ?? 'Billing feature is not available',
+              style: TextStyle(color: AppColors.textSecondary),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
+      );
+    }
+
     final plans = (_catalog?['plans'] is List) ? _catalog!['plans'] as List : [];
     final packs = (_catalog?['scanPacks'] is List) ? _catalog!['scanPacks'] as List : [];
     final current = _sub?['plan']?.toString() ?? 'free';

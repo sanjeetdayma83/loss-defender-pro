@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../core/network/api_client.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/app_dialogs.dart';
+import '../../../core/config/feature_flags.dart';
 
 class _Channel {
   final String provider, name, subtitle;
@@ -53,6 +54,16 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
   }
 
   Future<void> _connect(String provider) async {
+    // Check if provider is enabled via feature flags
+    final providerEnabled = isFeatureEnabled('marketplace.$provider');
+    if (!providerEnabled) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('$provider is not available: ${getFeatureInfo('marketplace.$provider')?['reason'] ?? 'Feature disabled'}')),
+        );
+      }
+      return;
+    }
     final storeCtrl = TextEditingController(text: 'My $provider Store');
     final webhookCtrl = TextEditingController();
     final accessCtrl = TextEditingController();
@@ -198,7 +209,9 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
         const SizedBox(height: 20),
         const Text('Add channel', style: TextStyle(fontWeight: FontWeight.w600)),
         const SizedBox(height: 8),
-        ...channels.map((ch) => Card(
+        ...channels
+            .where((ch) => isFeatureEnabled('marketplace.${ch.provider}'))
+            .map((ch) => Card(
               child: ListTile(
                 leading: CircleAvatar(
                   backgroundColor: AppColors.accent.withOpacity(0.12),
