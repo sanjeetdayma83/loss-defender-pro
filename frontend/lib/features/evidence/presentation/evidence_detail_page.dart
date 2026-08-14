@@ -1,6 +1,7 @@
 ﻿import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:video_player/video_player.dart';
 import '../../../core/network/api_client.dart';
 import '../../../core/theme/app_theme.dart';
 
@@ -15,11 +16,19 @@ class _EvidenceDetailPageState extends State<EvidenceDetailPage> {
   Map<String, dynamic>? _data;
   bool _loading = true;
   String? _error;
+  VideoPlayerController? _videoController;
+  bool _videoInitialized = false;
 
   @override
   void initState() {
     super.initState();
     _load();
+  }
+
+  @override
+  void dispose() {
+    _videoController?.dispose();
+    super.dispose();
   }
 
   Future<void> _load() async {
@@ -29,11 +38,31 @@ class _EvidenceDetailPageState extends State<EvidenceDetailPage> {
       final body = res.data;
       final data = body is Map && body['data'] != null ? Map<String, dynamic>.from(body['data'] as Map) : Map<String, dynamic>.from(body as Map);
       setState(() { _data = data; _loading = false; });
+      _initVideo();
     } on DioException catch (e) {
       setState(() {
         _error = e.response?.data?['message']?.toString() ?? e.message ?? 'Failed';
         _loading = false;
       });
+    }
+  }
+
+  void _initVideo() {
+    final d = _data;
+    if (d == null) return;
+    final packUrl = d['packDownloadUrl']?.toString() ?? d['segmentDownloadUrl']?.toString() ?? d['videoUrl']?.toString();
+    if (packUrl != null && packUrl.isNotEmpty) {
+      try {
+        _videoController = VideoPlayerController.networkUrl(Uri.parse(packUrl))
+          ..initialize().then((_) {
+            if (mounted) setState(() => _videoInitialized = true);
+          }).catchError((e) {
+            debugPrint('Video init error: $e');
+            if (mounted) setState(() => _videoInitialized = false);
+          });
+      } catch (e) {
+        debugPrint('Video controller error: $e');
+      }
     }
   }
 
@@ -65,7 +94,7 @@ class _EvidenceDetailPageState extends State<EvidenceDetailPage> {
   Widget _buildBody() {
     final d = _data!;
     final frames = (d['frames'] is List) ? d['frames'] as List : [];
-    final packUrl = d['packDownloadUrl']?.toString() ?? d['segmentDownloadUrl']?.toString();
+    final packUrl = d['packDownloadUrl']?.toString() ?? d['segmentDownloadUrl']?.toString() ?? d['videoUrl']?.toString();
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
@@ -73,6 +102,39 @@ class _EvidenceDetailPageState extends State<EvidenceDetailPage> {
         Text('Frames: ${d['frameCount'] ?? frames.length}', style: const TextStyle(color: AppColors.textSecondary)),
         Text('packKey: ${d['packKey'] ?? '—'}', style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
         const SizedBox(height: 12),
+        if (packUrl != null && packUrl.isNotEmpty && _videoInitialized && _videoController != null)
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('Video Playback', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 8),
+              AspectRatio(
+                aspectRatio: _videoController!.value.aspectRatio,
+                child: VideoPlayer(_videoController!),
+              ),
+              VideoProgressIndicator(_videoController!, allowScrubbing: true),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  IconButton(
+                    icon: Icon(_videoController!.value.isPlaying ? Icons.pause : Icons.play_arrow),
+                    onPressed: () {
+                      setState(() {
+                        _videoController!.value.isPlaying
+                            ? _videoController!.pause()
+                            : _videoController!.play();
+                      });
+                    },
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.replay),
+                    onPressed: () => _videoController!.seekTo(Duration.zero),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+            ],
+          ),
         Wrap(spacing: 8, children: [
           FilledButton.icon(
             onPressed: packUrl == null ? null : () => _open(packUrl),
