@@ -15,9 +15,10 @@ import { PermissionsGuard } from '../common/guards/permissions.guard';
 import { TenantGuard } from '../common/guards/tenant.guard';
 import { PlanLimitGuard } from '../common/guards/plan-limit.guard';
 import { EmailModule } from '../email/email.module';
+import { PrismaModule } from '../prisma/prisma.module';
 
 @Module({
-  imports: [PassportModule, JwtModule.register({}), EmailModule],
+  imports: [PassportModule, JwtModule.register({}), EmailModule, PrismaModule],
   controllers: [RbacController, AuthController],
   providers: [GoogleOAuthService, OtpService, 
     AuthService,

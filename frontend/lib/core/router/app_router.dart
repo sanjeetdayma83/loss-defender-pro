@@ -12,6 +12,7 @@ import '../../features/dashboard/presentation/dashboard_screen.dart';
 import '../../features/orders/presentation/orders_screen.dart';
 import '../../features/scanner/presentation/scanner_screen.dart';
 import '../../features/recording/presentation/recording_screen.dart';
+import '../../features/recording/presentation/recording_session_page.dart';
 import '../../features/dispatch/presentation/dispatch_screen.dart';
 import '../../features/warehouses/presentation/warehouses_screen.dart';
 import '../../features/users/presentation/users_screen.dart';
@@ -45,6 +46,13 @@ final appRouter = GoRouter(
         GoRoute(path: '/orders', builder: (_, __) => const OrdersScreen()),
         GoRoute(path: '/scanner', builder: (_, __) => const ScannerScreen()),
         GoRoute(path: '/recording', builder: (_, __) => const RecordingScreen()),
+        GoRoute(
+          path: '/recording/session',
+          builder: (_, state) => RecordingSessionPage(
+            orderId: state.uri.queryParameters['orderId'],
+            warehouseId: state.uri.queryParameters['warehouseId'],
+          ),
+        ),
         GoRoute(path: '/dispatch', builder: (_, __) => const DispatchScreen()),
         GoRoute(path: '/warehouses', builder: (_, __) => const WarehousesScreen()),
         GoRoute(path: '/users', builder: (_, __) => const UsersScreen()),

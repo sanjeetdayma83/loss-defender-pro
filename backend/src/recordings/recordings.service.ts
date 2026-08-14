@@ -2,9 +2,11 @@ import {
   Injectable,
   NotFoundException,
   BadRequestException,
+  ForbiddenException,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { StorageService } from '../storage/storage.service';
+import { warehouseScope, assertWarehouseAccess } from '../common/utils/warehouse-scope';
 
 @Injectable()
 export class RecordingsService {
@@ -13,28 +15,30 @@ export class RecordingsService {
     private readonly storage: StorageService,
   ) {}
 
-  list(companyId: string) {
+  list(companyId: string, user?: { role?: string; warehouseId?: string | null }) {
     return this.prisma.recording.findMany({
-      where: { companyId },
+      where: { companyId, ...warehouseScope(user || {}, {}) },
       orderBy: { createdAt: 'desc' },
       take: 100,
     });
   }
 
-  async getOne(companyId: string, id: string) {
+  async getOne(companyId: string, id: string, user?: { role?: string; warehouseId?: string | null }) {
     const rec = await this.prisma.recording.findFirst({
-      where: { id, companyId },
+      where: { id, companyId, ...warehouseScope(user || {}, {}) },
       include: { order: true } as any,
     });
     if (!rec) throw new NotFoundException('Recording not found');
+    assertWarehouseAccess(user || {}, rec.warehouseId);
     return rec;
   }
 
-  async getDownload(companyId: string, id: string) {
+  async getDownload(companyId: string, id: string, user?: { role?: string; warehouseId?: string | null }) {
     const rec = await this.prisma.recording.findFirst({
-      where: { id, companyId },
+      where: { id, companyId, ...warehouseScope(user || {}, {}) },
     });
     if (!rec) throw new NotFoundException('Recording not found');
+    assertWarehouseAccess(user || {}, rec.warehouseId);
 
     const meta = ((rec as any).metadata as any) || {};
     const key =
@@ -128,11 +132,13 @@ export class RecordingsService {
     recordingId: string,
     segmentIndex: number,
     contentType = 'video/webm',
+    user?: { role?: string; warehouseId?: string | null },
   ) {
     const rec = await this.prisma.recording.findFirst({
-      where: { id: recordingId, companyId },
+      where: { id: recordingId, companyId, ...warehouseScope(user || {}, {}) },
     });
     if (!rec) throw new NotFoundException('Recording not found');
+    assertWarehouseAccess(user || {}, rec.warehouseId);
 
     const key = (this.storage as any).recordingSegmentKey
       ? (this.storage as any).recordingSegmentKey(
@@ -161,11 +167,13 @@ export class RecordingsService {
       sizeBytes?: number;
       [key: string]: unknown;
     },
+    user?: { role?: string; warehouseId?: string | null },
   ) {
     const rec = await this.prisma.recording.findFirst({
-      where: { id: recordingId, companyId },
+      where: { id: recordingId, companyId, ...warehouseScope(user || {}, {}) },
     });
     if (!rec) throw new NotFoundException('Recording not found');
+    assertWarehouseAccess(user || {}, rec.warehouseId);
 
     const segmentIndex =
       dto.segmentIndex ?? dto.index ?? dto.sequence ?? 0;
@@ -188,11 +196,12 @@ export class RecordingsService {
     };
   }
 
-  async pause(companyId: string, id: string) {
+  async pause(companyId: string, id: string, user?: { role?: string; warehouseId?: string | null }) {
     const rec = await this.prisma.recording.findFirst({
-      where: { id, companyId },
+      where: { id, companyId, ...warehouseScope(user || {}, {}) },
     });
     if (!rec) throw new NotFoundException('Recording not found');
+    assertWarehouseAccess(user || {}, rec.warehouseId);
     const meta = ((rec as any).metadata as any) || {};
     try {
       return await this.prisma.recording.update({
@@ -220,11 +229,12 @@ export class RecordingsService {
     }
   }
 
-  async resume(companyId: string, id: string) {
+  async resume(companyId: string, id: string, user?: { role?: string; warehouseId?: string | null }) {
     const rec = await this.prisma.recording.findFirst({
-      where: { id, companyId },
+      where: { id, companyId, ...warehouseScope(user || {}, {}) },
     });
     if (!rec) throw new NotFoundException('Recording not found');
+    assertWarehouseAccess(user || {}, rec.warehouseId);
     const meta = ((rec as any).metadata as any) || {};
     try {
       return await this.prisma.recording.update({
@@ -256,11 +266,13 @@ export class RecordingsService {
     companyId: string,
     id: string,
     dto: { checksum: string; algorithm?: string; segmentIndex?: number },
+    user?: { role?: string; warehouseId?: string | null },
   ) {
     const rec = await this.prisma.recording.findFirst({
-      where: { id, companyId },
+      where: { id, companyId, ...warehouseScope(user || {}, {}) },
     });
     if (!rec) throw new NotFoundException('Recording not found');
+    assertWarehouseAccess(user || {}, rec.warehouseId);
     const meta = ((rec as any).metadata as any) || {};
     const checksums = Array.isArray(meta.checksums)
       ? [...meta.checksums]
@@ -282,11 +294,13 @@ export class RecordingsService {
     recordingId: string,
     durationSec?: number,
     segmentCount?: number,
+    user?: { role?: string; warehouseId?: string | null },
   ) {
     const rec = await this.prisma.recording.findFirst({
-      where: { id: recordingId, companyId },
+      where: { id: recordingId, companyId, ...warehouseScope(user || {}, {}) },
     });
     if (!rec) throw new NotFoundException('Recording not found');
+    assertWarehouseAccess(user || {}, rec.warehouseId);
 
     const data: any = { status: 'completed' };
     if (durationSec != null) data.durationSec = durationSec;

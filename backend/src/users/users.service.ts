@@ -8,6 +8,7 @@ import { InviteUserDto, UpdateUserDto } from './dto/user.dto';
 import * as bcrypt from 'bcryptjs';
 import { randomBytes, createHash } from 'crypto';
 import { EmailService } from '../email/email.service';
+import { AuthService } from '../auth/auth.service';
 
 @Injectable()
 export class UsersService {
@@ -15,6 +16,7 @@ export class UsersService {
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
     private readonly emailService: EmailService,
+    private readonly auth: AuthService,
   ) {}
 
   async list(companyId: string) {
@@ -220,22 +222,29 @@ export class UsersService {
     if (dto.warehouseId !== undefined) data.warehouseId = dto.warehouseId;
     if (dto.status !== undefined) data.status = dto.status;
 
-    const updated = await this.prisma.user.update({
-      where: { id },
-      data,
-      select: {
-        id: true,
-        email: true,
-        name: true,
-        phone: true,
-        role: true,
-        status: true,
-        warehouseId: true,
-        updatedAt: true,
-      },
-    });
+const updated = await this.prisma.user.update({
+        where: { id },
+        data,
+        select: {
+          id: true,
+          email: true,
+          name: true,
+          phone: true,
+          role: true,
+          status: true,
+          warehouseId: true,
+          updatedAt: true,
+        },
+      });
 
-    await this.audit.log({
+      // Blacklist user's tokens if role or status changed
+      const roleChanged = dto.role !== undefined && dto.role !== before.role;
+      const statusChanged = dto.status !== undefined && dto.status !== before.status;
+      if (roleChanged || statusChanged) {
+        await this.auth.revokeAllSessions(id);
+      }
+
+      await this.audit.log({
       companyId,
       actorId,
       action: 'user.update',

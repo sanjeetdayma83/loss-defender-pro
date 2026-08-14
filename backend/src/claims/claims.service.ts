@@ -1,5 +1,6 @@
-﻿import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+﻿import { Injectable, NotFoundException, BadRequestException, ForbiddenException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { warehouseScope, assertWarehouseAccess } from '../common/utils/warehouse-scope';
 
 const ALLOWED: Record<string, string[]> = {
   open: ['under_review', 'approved', 'rejected', 'closed'],
@@ -14,17 +15,21 @@ const ALLOWED: Record<string, string[]> = {
 export class ClaimsService {
   constructor(private readonly prisma: PrismaService) {}
 
-  list(companyId: string) {
+  list(companyId: string, user?: { role?: string; warehouseId?: string | null }) {
     return this.prisma.claim.findMany({
-      where: { companyId },
+      where: { companyId, ...warehouseScope(user || {}, {}) },
       orderBy: { createdAt: 'desc' },
       take: 100,
     });
   }
 
-  async getOne(companyId: string, id: string) {
-    const row = await this.prisma.claim.findFirst({ where: { id, companyId } });
+  async getOne(companyId: string, id: string, user?: { role?: string; warehouseId?: string | null }) {
+    const row = await this.prisma.claim.findFirst({ 
+      where: { id, companyId, ...warehouseScope(user || {}, {}) },
+      include: { order: true }
+    });
     if (!row) throw new NotFoundException('Claim not found');
+    assertWarehouseAccess(user || {}, (row as any).order?.warehouseId);
     return row;
   }
 
@@ -32,9 +37,11 @@ export class ClaimsService {
     companyId: string,
     actorId: string,
     data: { orderId: string; reason?: string; description?: string; marketplace?: string },
+    user?: { role?: string; warehouseId?: string | null },
   ) {
     const order = await this.prisma.order.findFirst({ where: { id: data.orderId, companyId } });
     if (!order) throw new NotFoundException('Order not found');
+    assertWarehouseAccess(user || {}, order.warehouseId);
 
     const claim = await this.prisma.claim.create({
       data: {
@@ -61,9 +68,14 @@ export class ClaimsService {
     id: string,
     status: string,
     decisionNote?: string,
+    user?: { role?: string; warehouseId?: string | null },
   ) {
-    const row = await this.prisma.claim.findFirst({ where: { id, companyId } });
+    const row = await this.prisma.claim.findFirst({ 
+      where: { id, companyId, ...warehouseScope(user || {}, {}) },
+      include: { order: true }
+    });
     if (!row) throw new NotFoundException('Claim not found');
+    assertWarehouseAccess(user || {}, (row as any).order?.warehouseId);
 
     const cur = (row.status as string) || 'open';
     const next = ALLOWED[cur] || ALLOWED['open'] || [];

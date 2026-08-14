@@ -45,6 +45,10 @@ export class LoginDto {
   @IsOptional()
   @IsString()
   deviceId?: string;
+
+  @IsOptional()
+  @IsString()
+  captchaToken?: string;
 }
 
 export class ForgotPasswordDto {

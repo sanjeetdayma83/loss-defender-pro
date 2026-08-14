@@ -4,8 +4,8 @@ describe('order transitions', () => {
   it('packing → recording allowed', () => {
     expect(canTransition('packing', 'recording')).toBe(true);
   });
-  it('dispatched is terminal', () => {
-    expect(ORDER_TRANSITIONS.dispatched).toEqual([]);
+  it('dispatched can transition to shipped/claimed/returned', () => {
+    expect(ORDER_TRANSITIONS.dispatched).toEqual(['shipped', 'claimed', 'returned']);
   });
   it('evidence_ready → packing blocked', () => {
     expect(canTransition('evidence_ready', 'packing')).toBe(false);

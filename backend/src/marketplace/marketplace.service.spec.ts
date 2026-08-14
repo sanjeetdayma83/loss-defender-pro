@@ -13,8 +13,13 @@ describe('MarketplaceService', () => {
     expect(Array.isArray(rows)).toBe(true);
   });
 
-  it('syncOrders returns honest not_configured status (no fake success)', async () => {
-    const svc = new MarketplaceService({} as any);
+  it('syncOrders returns not_configured when no connection', async () => {
+    const prisma = {
+      marketplaceConnection: {
+        findFirst: jest.fn().mockResolvedValue(null),
+      },
+    } as any;
+    const svc = new MarketplaceService(prisma);
     const res = await svc.syncOrders('c1', 'amazon');
     expect(res.status).toBe('not_configured');
     expect(res.provider).toBe('amazon');

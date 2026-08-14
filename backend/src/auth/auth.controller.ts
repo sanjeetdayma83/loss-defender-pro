@@ -4,6 +4,7 @@ import {
 } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { OtpService } from './otp.service';
+import { JwtService } from '@nestjs/jwt';
 import {
   RegisterDto, LoginDto, ForgotPasswordDto, ResetPasswordDto,
   VerifyEmailDto, RefreshDto, LogoutDto,
@@ -19,7 +20,7 @@ import { Throttle } from '@nestjs/throttler';
 @ApiTags('auth')
 @Controller('auth')
 export class AuthController {
-  constructor(private readonly auth: AuthService, private readonly otp: OtpService, private readonly google: GoogleOAuthService) {}
+  constructor(private readonly auth: AuthService, private readonly otp: OtpService, private readonly google: GoogleOAuthService, private readonly jwt: JwtService) {}
 
   @Public()
   @Throttle({ default: { limit: 5, ttl: 60000 } })
@@ -44,8 +45,11 @@ export class AuthController {
 
   @Post('logout')
   @ApiBearerAuth()
-  logout(@CurrentUser() user: AuthenticatedUser, @Body() dto: LogoutDto) {
-    return this.auth.logout(user.sub, dto);
+  logout(@CurrentUser() user: AuthenticatedUser, @Body() dto: LogoutDto, @Req() req: Request) {
+    const authHeader = req.headers.authorization;
+    const accessToken = authHeader?.replace('Bearer ', '');
+    const accessTokenJti = accessToken ? this.jwt.decode(accessToken)?.['jti'] : undefined;
+    return this.auth.logout(user.sub, dto, accessTokenJti);
   }
 
   @Public()
@@ -72,8 +76,12 @@ export class AuthController {
   changePassword(
     @CurrentUser() user: AuthenticatedUser,
     @Body() dto: ChangePasswordDto,
+    @Req() req: Request,
   ) {
-    return this.auth.changePassword(user.sub, dto.currentPassword, dto.newPassword);
+    const authHeader = req.headers.authorization;
+    const accessToken = authHeader?.replace('Bearer ', '');
+    const accessTokenJti = accessToken ? this.jwt.decode(accessToken)?.['jti'] : undefined;
+    return this.auth.changePassword(user.sub, dto.currentPassword, dto.newPassword, accessTokenJti);
   }
 
   @Public()
@@ -94,8 +102,11 @@ export class AuthController {
     return this.auth.revokeSession(user.sub, id);
   }
   @Post('logout-all')
-  logoutAll(@CurrentUser() user: AuthenticatedUser) {
-    return this.auth.revokeAllSessions(user.sub);
+  logoutAll(@CurrentUser() user: AuthenticatedUser, @Req() req: Request) {
+    const authHeader = req.headers.authorization;
+    const accessToken = authHeader?.replace('Bearer ', '');
+    const accessTokenJti = accessToken ? this.jwt.decode(accessToken)?.['jti'] : undefined;
+    return this.auth.revokeAllSessions(user.sub, accessTokenJti);
   }
 
   @Public()

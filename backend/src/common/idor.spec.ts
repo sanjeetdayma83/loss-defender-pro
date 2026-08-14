@@ -61,6 +61,9 @@ function mockPrisma(overrides: any = {}) {
       findFirst: jest.fn(),
       update: jest.fn(),
     },
+    marketplaceConnection: {
+      findFirst: jest.fn(),
+    },
     ...overrides,
   };
 }
@@ -175,7 +178,8 @@ describe('Cross-Tenant IDOR Unit Tests', () => {
 
     beforeEach(() => {
       prisma = mockPrisma();
-      service = new EvidenceService(prisma as any, {} as any);
+      const mockQueue = { add: jest.fn().mockResolvedValue({}) };
+      service = new EvidenceService(prisma as any, {} as any, mockQueue as any);
     });
 
     it('list - returns only evidence for user companyId', async () => {
@@ -236,6 +240,7 @@ describe('Cross-Tenant IDOR Unit Tests', () => {
       await expect(service.getOne(companyA, 'claim-b')).rejects.toThrow(NotFoundException);
       expect(prisma.claim.findFirst).toHaveBeenCalledWith({
         where: { id: 'claim-b', companyId: companyA },
+        include: { order: true },
       });
     });
 
@@ -254,7 +259,8 @@ describe('Cross-Tenant IDOR Unit Tests', () => {
 
     beforeEach(() => {
       prisma = mockPrisma();
-      service = new UsersService(prisma as any, {} as any, {} as any);
+      const mockAuth = { revokeAllSessions: jest.fn().mockResolvedValue({ revoked: true }) };
+      service = new UsersService(prisma as any, {} as any, {} as any, mockAuth as any);
     });
 
     it('list - returns only users for user companyId', async () => {

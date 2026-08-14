@@ -23,12 +23,12 @@ export class ClaimsController {
 
   @Get()
   list(@CurrentUser() u: AuthenticatedUser) {
-    return this.claims.list(u.companyId);
+    return this.claims.list(u.companyId, u);
   }
 
   @Get(':id')
   getOne(@CurrentUser() u: AuthenticatedUser, @Param('id') id: string) {
-    return this.claims.getOne(u.companyId, id);
+    return this.claims.getOne(u.companyId, id, u);
   }
 
   @Post()
@@ -40,7 +40,7 @@ export class ClaimsController {
   )
   create(@CurrentUser() u: AuthenticatedUser, @Body() dto: CreateClaimDto) {
     const actorId = (u as any).id || (u as any).sub || (u as any).userId;
-    return this.claims.create(u.companyId, actorId, dto);
+    return this.claims.create(u.companyId, actorId, dto, u);
   }
 
   @Patch(':id')
@@ -62,6 +62,7 @@ export class ClaimsController {
       id,
       dto.status,
       dto.decisionNote,
+      u,
     );
   }
 }

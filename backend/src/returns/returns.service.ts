@@ -1,5 +1,6 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, ForbiddenException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { warehouseScope, assertWarehouseAccess } from '../common/utils/warehouse-scope';
 
 const ALLOWED: Record<string, string[]> = {
   requested: ['received', 'rejected', 'closed'],
@@ -15,17 +16,18 @@ const ALLOWED: Record<string, string[]> = {
 export class ReturnsService {
   constructor(private readonly prisma: PrismaService) {}
 
-  list(companyId: string) {
+  list(companyId: string, user?: { role?: string; warehouseId?: string | null }) {
     return this.prisma.return.findMany({
-      where: { companyId },
+      where: { companyId, ...warehouseScope(user || {}, {}) },
       orderBy: { createdAt: 'desc' },
       take: 100,
     });
   }
 
-  async create(companyId: string, data: { orderId: string; reason?: string; notes?: string }) {
+  async create(companyId: string, data: { orderId: string; reason?: string; notes?: string }, user?: { role?: string; warehouseId?: string | null }) {
     const o = await this.prisma.order.findFirst({ where: { id: data.orderId, companyId } });
     if (!o) throw new NotFoundException('Order not found');
+    assertWarehouseAccess(user || {}, o.warehouseId);
     return this.prisma.return.create({
       data: {
         companyId,
@@ -37,9 +39,13 @@ export class ReturnsService {
     });
   }
 
-  async updateStatus(companyId: string, id: string, status: string) {
-    const row = await this.prisma.return.findFirst({ where: { id, companyId } });
+  async updateStatus(companyId: string, id: string, status: string, user?: { role?: string; warehouseId?: string | null }) {
+    const row = await this.prisma.return.findFirst({ 
+      where: { id, companyId, ...warehouseScope(user || {}, {}) },
+      include: { order: true }
+    });
     if (!row) throw new NotFoundException('Return not found');
+    assertWarehouseAccess(user || {}, (row as any).order?.warehouseId);
     const next = ALLOWED[row.status as string] || [];
     if (!next.includes(status)) {
       throw new BadRequestException(`Cannot ${row.status} → ${status}. Allowed: ${next.join(', ') || 'none'}`);

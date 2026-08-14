@@ -4,12 +4,16 @@
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { IS_PUBLIC_KEY } from '../decorators/public.decorator';
+import { PrismaService } from '../../prisma/prisma.service';
 
 @Injectable()
 export class TenantGuard implements CanActivate {
-  constructor(private readonly reflector: Reflector) {}
+  constructor(
+    private readonly reflector: Reflector,
+    private readonly prisma: PrismaService,
+  ) {}
 
-  canActivate(context: ExecutionContext): boolean {
+  async canActivate(context: ExecutionContext): Promise<boolean> {
     const isPublic = this.reflector.getAllAndOverride<boolean>(IS_PUBLIC_KEY, [
       context.getHandler(),
       context.getClass(),
@@ -23,7 +27,17 @@ export class TenantGuard implements CanActivate {
     let companyId: string | undefined = user.companyId;
     if (user.role === 'super_admin') {
       const headerTenant = request.headers['x-tenant-id'] as string | undefined;
-      if (headerTenant) companyId = headerTenant;
+      if (headerTenant) {
+        // Validate that the tenant exists and is active
+        const tenant = await this.prisma.company.findFirst({
+          where: { id: headerTenant, status: 'active' },
+          select: { id: true },
+        });
+        if (!tenant) {
+          throw new ForbiddenException('Invalid tenant ID');
+        }
+        companyId = headerTenant;
+      }
     }
     if (!companyId) {
       throw new ForbiddenException('Tenant context missing');

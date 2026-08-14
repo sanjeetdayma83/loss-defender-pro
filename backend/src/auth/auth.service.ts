@@ -30,7 +30,8 @@ export class AuthService {
   private async signAccess(payload: {
     sub: string; email: string; companyId: string; role: string;
   }) {
-    return this.jwt.signAsync(payload, {
+    const jti = randomBytes(16).toString('hex');
+    return this.jwt.signAsync({ ...payload, jti }, {
       secret:
         this.config.get<string>('jwt.accessSecret') ??
         process.env.JWT_ACCESS_SECRET ??
@@ -130,52 +131,112 @@ export class AuthService {
     return { accessToken, refreshToken };
   }
 
-  async login(dto: LoginDto, ip?: string, ua?: string) {
-    const user = await this.prisma.user.findFirst({
-      where: { email: dto.email, status: { not: 'deleted' } },
-    });
-    if (!user) throw new UnauthorizedException('Invalid credentials');
-
-    const lockedUntil = (user as any).lockedUntil as Date | null | undefined;
-    if (lockedUntil && lockedUntil > new Date()) {
-      throw new ForbiddenException(`Account locked until ${lockedUntil.toISOString()}`);
-    }
-
-    const ok = await bcrypt.compare(dto.password, (user as any).passwordHash);
-    if (!ok) {
-      const fails = (((user as any).failedLoginCount as number) ?? 0) + 1;
-      const data: any = { failedLoginCount: fails };
-      if (fails >= 5) {
-        data.lockedUntil = new Date(Date.now() + 30 * 60 * 1000);
-        data.failedLoginCount = 0;
+async login(dto: LoginDto, ip?: string, ua?: string) {
+      const user = await this.prisma.user.findFirst({
+        where: { email: dto.email, status: { not: 'deleted' } },
+      });
+      if (!user) {
+        await this.recordLoginAttempt(ip, dto.email, false);
+        throw new UnauthorizedException('Invalid credentials');
       }
-      await this.prisma.user.update({ where: { id: user.id }, data });
-      throw new UnauthorizedException('Invalid credentials');
+
+      const lockedUntil = (user as any).lockedUntil as Date | null | undefined;
+      if (lockedUntil && lockedUntil > new Date()) {
+        throw new ForbiddenException(`Account locked until ${lockedUntil.toISOString()}`);
+      }
+
+      // Check IP-based lockout
+      if (ip) {
+        const recentFails = await this.prisma.loginAttempt.count({
+          where: {
+            ip,
+            success: false,
+            createdAt: { gte: new Date(Date.now() - 15 * 60 * 1000) },
+          },
+        });
+        if (recentFails >= 5) {
+          await this.recordLoginAttempt(ip, dto.email, false);
+          throw new ForbiddenException('Too many failed attempts from this IP. Try again in 15 minutes.');
+        }
+
+        // Require CAPTCHA after 3 failed attempts from this IP
+        if (recentFails >= 3) {
+          if (!dto.captchaToken) {
+            throw new ForbiddenException('CAPTCHA required. Too many failed attempts from this IP.');
+          }
+          // Verify CAPTCHA token (implement your CAPTCHA verification here)
+          const captchaValid = await this.verifyCaptcha(dto.captchaToken);
+          if (!captchaValid) {
+            throw new ForbiddenException('Invalid CAPTCHA');
+          }
+        }
+      }
+
+      const ok = await bcrypt.compare(dto.password, (user as any).passwordHash);
+      if (!ok) {
+        await this.recordLoginAttempt(ip, dto.email, false);
+        const fails = (((user as any).failedLoginCount as number) ?? 0) + 1;
+        const data: any = { failedLoginCount: fails };
+        if (fails >= 5) {
+          data.lockedUntil = new Date(Date.now() + 30 * 60 * 1000);
+          data.failedLoginCount = 0;
+        }
+        await this.prisma.user.update({ where: { id: user.id }, data });
+        throw new UnauthorizedException('Invalid credentials');
+      }
+
+      await this.recordLoginAttempt(ip, dto.email, true);
+
+      await this.prisma.user.update({
+        where: { id: user.id },
+        data: {
+          failedLoginCount: 0,
+          lockedUntil: null,
+          lastLoginAt: new Date(),
+        } as any,
+      });
+
+      if (String((user as any).status) === 'pending') {
+        throw new UnauthorizedException('Email not verified');
+      }
+      if (String((user as any).status) !== 'active') {
+        throw new UnauthorizedException('Account not active');
+      }
+      const tokens = await this.tokensFor(user as any, dto.deviceId, ip, ua);
+      return {
+        ...tokens,
+        user: {
+          id: user.id, email: user.email, name: user.name,
+          role: user.role, companyId: user.companyId,
+        },
+      };
     }
 
-    await this.prisma.user.update({
-      where: { id: user.id },
-      data: {
-        failedLoginCount: 0,
-        lockedUntil: null,
-        lastLoginAt: new Date(),
-      } as any,
+  private async recordLoginAttempt(ip: string | undefined, email: string | undefined, success: boolean) {
+    if (!ip) return;
+    await this.prisma.loginAttempt.create({
+      data: { ip, email, success },
     });
+  }
 
-    if (String((user as any).status) === 'pending') {
-      throw new UnauthorizedException('Email not verified');
+  private async verifyCaptcha(token: string): Promise<boolean> {
+    const secret = this.config.get<string>('CAPTCHA_SECRET') ?? process.env.CAPTCHA_SECRET;
+    if (!secret) {
+      // In development, allow any token for testing
+      if (process.env.NODE_ENV !== 'production') return true;
+      return false;
     }
-    if (String((user as any).status) !== 'active') {
-      throw new UnauthorizedException('Account not active');
+    try {
+      const response = await fetch('https://www.google.com/recaptcha/api/siteverify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({ secret, response: token }),
+      });
+      const result = await response.json();
+      return result.success === true && (result.score ?? 1) >= 0.5;
+    } catch {
+      return false;
     }
-    const tokens = await this.tokensFor(user as any, dto.deviceId, ip, ua);
-    return {
-      ...tokens,
-      user: {
-        id: user.id, email: user.email, name: user.name,
-        role: user.role, companyId: user.companyId,
-      },
-    };
   }
 
   async refresh(dto: RefreshDto, ip?: string, ua?: string) {
@@ -215,7 +276,10 @@ export class AuthService {
     return this.tokensFor(session.user as any, dto.deviceId ?? session.deviceId ?? undefined, ip, ua);
   }
 
-  async logout(userId: string, dto: LogoutDto) {
+  async logout(userId: string, dto: LogoutDto, accessTokenJti?: string) {
+    if (accessTokenJti) {
+      await this.blacklistAccessToken(accessTokenJti, userId);
+    }
     if (dto.refreshToken) {
       const tokenHash = this.hashToken(dto.refreshToken);
       await this.prisma.refreshSession.updateMany({
@@ -234,6 +298,14 @@ export class AuthService {
       });
     }
     return { ok: true };
+  }
+
+  private async blacklistAccessToken(jti: string, userId: string) {
+    const payload = this.jwt.decode(jti) as { exp?: number } | null;
+    const expiresAt = payload?.exp ? new Date(payload.exp * 1000) : new Date(Date.now() + 15 * 60 * 1000);
+    await this.prisma.tokenBlacklist.create({
+      data: { jti, userId, expiresAt },
+    });
   }
 
   async sessions(userId: string) {
@@ -332,7 +404,7 @@ export class AuthService {
     });
     return { ok: true };
   }
-  async changePassword(userId: string, currentPassword: string, newPassword: string) {
+  async changePassword(userId: string, currentPassword: string, newPassword: string, accessTokenJti?: string) {
     const user = await this.prisma.user.findFirst({ where: { id: userId } });
     if (!user) throw new NotFoundException('User not found');
     const ok = await bcrypt.compare(currentPassword, (user as any).passwordHash);
@@ -346,6 +418,9 @@ export class AuthService {
       where: { userId, revokedAt: null },
       data: { revokedAt: new Date() },
     });
+    if (accessTokenJti) {
+      await this.blacklistAccessToken(accessTokenJti, userId);
+    }
     return { ok: true };
   }
   async listSessions(userId: string) {
@@ -374,21 +449,24 @@ export class AuthService {
     return [];
   }
 
-  async logoutAll(userId: string) {
-    const client = this.prisma as any;
-    if (client.refreshSession) {
-      await client.refreshSession.updateMany({
-        where: { userId, revokedAt: null },
-        data: { revokedAt: new Date() },
-      });
-    } else if (client.session) {
-      await client.session.updateMany({
-        where: { userId },
-        data: { revokedAt: new Date() },
-      });
+async logoutAll(userId: string, accessTokenJti?: string) {
+      const client = this.prisma as any;
+      if (client.refreshSession) {
+        await client.refreshSession.updateMany({
+          where: { userId, revokedAt: null },
+          data: { revokedAt: new Date() },
+        });
+      } else if (client.session) {
+        await client.session.updateMany({
+          where: { userId },
+          data: { revokedAt: new Date() },
+        });
+      }
+      if (accessTokenJti) {
+        await this.blacklistAccessToken(accessTokenJti, userId);
+      }
+      return { ok: true };
     }
-    return { ok: true };
-  }
   async acceptInvite(dto: { token: string; name: string; password: string }) {
     const tokenHash = createHash('sha256').update(dto.token).digest('hex');
     const inv = await this.prisma.inviteToken.findFirst({
@@ -418,18 +496,21 @@ export class AuthService {
     ]);
     return { ok: true };
   }
-  async revokeAllSessions(userId: string) {
-    try {
-      await this.prisma.refreshSession.updateMany({
-        where: { userId, revokedAt: null },
-        data: { revokedAt: new Date() },
-      });
-    } catch (_) {
-      await this.prisma.session.updateMany({
-        where: { userId },
-        data: { revokedAt: new Date() } as any,
-      }).catch(() => null);
+async revokeAllSessions(userId: string, accessTokenJti?: string) {
+      try {
+        await this.prisma.refreshSession.updateMany({
+          where: { userId, revokedAt: null },
+          data: { revokedAt: new Date() },
+        });
+      } catch (_) {
+        await this.prisma.session.updateMany({
+          where: { userId },
+          data: { revokedAt: new Date() } as any,
+        }).catch(() => null);
+      }
+      if (accessTokenJti) {
+        await this.blacklistAccessToken(accessTokenJti, userId);
+      }
+      return { revoked: true };
     }
-    return { revoked: true };
   }
-}

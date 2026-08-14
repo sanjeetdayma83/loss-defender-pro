@@ -1,4 +1,4 @@
-import { ThrottlerGuard } from '@nestjs/throttler';
+import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { APP_GUARD } from '@nestjs/core';
 import { SupportModule } from './support/support.module';
 import { RbacModule } from './common/rbac/rbac.module';
@@ -7,8 +7,7 @@ import { AnalyticsModule } from './analytics/analytics.module';
 import { RequestIdMiddleware } from './common/middleware/request-id.middleware';
 import { MiddlewareConsumer, NestModule, Module } from '@nestjs/common';
 
-import { ConfigModule } from '@nestjs/config';
-import { ThrottlerModule } from '@nestjs/throttler';
+import { ConfigModule, ConfigService } from '@nestjs/config';
 import configuration from './config/configuration';
 import { PrismaModule } from './prisma/prisma.module';
 import { AuthModule } from './auth/auth.module';
@@ -30,12 +29,27 @@ import { QueuesModule } from './queues/queues.module';
 import { MarketplaceModule } from './marketplace/marketplace.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { RealtimeModule } from './realtime/realtime.module';
+import { FrameExtractorModule } from './frame-extractor/frame-extractor.module';
+import { RedisThrottlerStorage } from '@nestjs-redis/throttler-storage';
+import Redis from 'ioredis';
 
 @Module({
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],
   imports: [
     ConfigModule.forRoot({ isGlobal: true, load: [configuration] }),
-    ThrottlerModule.forRoot([{ ttl: 60000, limit: 100 }]),
+    ThrottlerModule.forRootAsync({
+      imports: [ConfigModule],
+      inject: [ConfigService],
+      useFactory: (config: ConfigService) => ({
+        throttlers: [
+          {
+            ttl: 60000,
+            limit: 100,
+            storage: new RedisThrottlerStorage(new Redis(config.get<string>('redis.url'))),
+          },
+        ],
+      }),
+    }),
     PrismaModule,
     EmailModule,
     QueuesModule,
@@ -56,6 +70,7 @@ import { RealtimeModule } from './realtime/realtime.module';
     AlertsModule,
     MarketplaceModule, AnalyticsModule, BillingModule, SupportModule,
     NotificationsModule,
+    FrameExtractorModule,
   ],
   
 })
