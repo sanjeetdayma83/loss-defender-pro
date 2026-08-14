@@ -54,8 +54,10 @@
         "@types/nodemailer": "^8.0.1",
         "@types/passport-jwt": "^4.0.1",
         "@types/socket.io": "^3.0.1",
+        "@types/supertest": "^6.0.2",
         "jest": "^30.4.2",
         "prisma": "^5.19.1",
+        "supertest": "^7.0.0",
         "ts-jest": "^29.4.12",
         "ts-node": "^10.9.2",
         "typescript": "^5.9.3"
