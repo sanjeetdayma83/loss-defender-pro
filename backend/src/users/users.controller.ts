@@ -1,4 +1,5 @@
-﻿import { Controller, Get, Post, Patch, Body, Param, Req } from '@nestjs/common';
+import { RequirePermission } from '../common/guards/permissions.guard';
+import { Controller, Get, Post, Patch, Body, Param, Req } from '@nestjs/common';
 import { UsersService } from './users.service';
 import { InviteUserDto, UpdateUserDto } from './dto/user.dto';
 import { CurrentUser, AuthenticatedUser } from '../common/decorators/current-user.decorator';
@@ -27,6 +28,7 @@ export class UsersController {
     return this.users.getOne(user.companyId, id);
   }
 
+  @RequirePermission('user.invite')
   @Post('invite')
   @Roles(Role.owner, Role.manager, Role.super_admin)
   invite(

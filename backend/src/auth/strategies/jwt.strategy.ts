@@ -34,6 +34,17 @@ export class JwtStrategy extends PassportStrategy(Strategy, "jwt") {
     }
     const userId = payload.sub || payload.userId || payload.id;
     if (!userId) throw new UnauthorizedException();
+    let warehouseId: string | null = payload.warehouseId ?? null;
+    try {
+      const dbUser = await this.prisma.user.findFirst({
+        where: { id: userId },
+        select: { warehouseId: true, status: true, companyId: true, role: true },
+      });
+      if (!dbUser || (dbUser as any).status === 'deleted') throw new UnauthorizedException();
+      warehouseId = (dbUser as any).warehouseId ?? null;
+    } catch (e: any) {
+      if (e instanceof UnauthorizedException) throw e;
+    }
     return {
       ...payload,
       id: userId,
@@ -41,6 +52,7 @@ export class JwtStrategy extends PassportStrategy(Strategy, "jwt") {
       userId,
       companyId: payload.companyId,
       role: payload.role,
+      warehouseId,
     };
   }
 }

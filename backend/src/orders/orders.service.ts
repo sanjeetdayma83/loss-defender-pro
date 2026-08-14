@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { OrderStatus, OrderItemStatus, Prisma } from '@prisma/client';
+import { warehouseScope } from '../common/utils/warehouse-scope';
 
 const TRANSITIONS: Partial<Record<OrderStatus, OrderStatus[]>> = {
   synced: ['queued', 'packing'],
@@ -25,9 +26,10 @@ const TRANSITIONS: Partial<Record<OrderStatus, OrderStatus[]>> = {
 export class OrdersService {
   constructor(private readonly prisma: PrismaService) {}
 
-  list(companyId: string, status?: OrderStatus) {
+  list(companyId: string, status?: OrderStatus, user?: { role?: string; warehouseId?: string | null }) {
+    const scope = warehouseScope(user || {}, status ? { status } : {});
     return this.prisma.order.findMany({
-      where: { companyId, ...(status ? { status } : {}) },
+      where: { companyId, ...scope },
       include: {
         items: true,
         warehouse: { select: { id: true, name: true, code: true } },

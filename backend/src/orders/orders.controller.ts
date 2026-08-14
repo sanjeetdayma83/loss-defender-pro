@@ -1,3 +1,4 @@
+import { RequirePermission } from '../common/guards/permissions.guard';
 import {
   Controller, Get, Post, Patch, Body, Param, Query, Req,
 } from '@nestjs/common';
@@ -55,7 +56,7 @@ export class OrdersController {
 
   @Get()
   list(@CurrentUser() user: AuthenticatedUser, @Query('status') status?: OrderStatus) {
-    return this.orders.list(user.companyId, status);
+    return this.orders.list(user.companyId, status, user);
   }
 
   @Get(':id')
@@ -63,6 +64,7 @@ export class OrdersController {
     return this.orders.getOne(user.companyId, id);
   }
 
+  @RequirePermission('order.write')
   @Post()
   @Roles(Role.owner, Role.manager, Role.supervisor, Role.marketplace_manager, Role.super_admin)
   create(@CurrentUser() user: AuthenticatedUser, @Body() dto: CreateOrderDto, @Req() req: Request) {
@@ -88,6 +90,7 @@ export class OrdersController {
     return this.orders.scan(user.companyId, id, user.sub, dto, req.ip);
   }
 
+  @RequirePermission('order.dispatch')
   @Post(':id/dispatch')
   @Roles(Role.owner, Role.manager, Role.supervisor, Role.packing_operator, Role.super_admin)
   dispatch(@CurrentUser() user: AuthenticatedUser, @Param('id') id: string, @Body() dto: DispatchOrderDto) {
