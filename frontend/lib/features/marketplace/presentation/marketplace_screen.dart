@@ -76,7 +76,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
                 const SizedBox(height: 12),
                 TextField(controller: refreshCtrl, decoration: const InputDecoration(labelText: 'Refresh Token (optional)', border: OutlineInputBorder())),
                 const SizedBox(height: 8),
-                const Text('Webhook URL: https://your-domain.com/api/v1/marketplace/webhooks/$provider', style: TextStyle(fontSize: 11, color: AppColors.textSecondary)),
+                Text('Webhook URL: https://your-domain.com/api/v1/marketplace/webhooks/$provider', style: TextStyle(fontSize: 11, color: AppColors.textSecondary)),
                 const Text('Header: X-Webhook-Secret or X-Signature', style: TextStyle(fontSize: 11, color: AppColors.textSecondary)),
               ],
             ),

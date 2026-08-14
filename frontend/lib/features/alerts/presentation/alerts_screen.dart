@@ -205,14 +205,15 @@ class _AlertsScreenState extends State<AlertsScreen> {
                                     ),
                                   ] else
                                     TextButton.icon(
-                                      onPressed: () => _resolve(a), // re-open
+                                      onPressed: () => _resolve(a),
                                       icon: const Icon(Icons.refresh, size: 16),
                                       label: const Text('Re-open'),
                                     ),
                                 ],
                               ),
                             ],
-                          );
+                          ),
+                        );
                       },
                     ),
         ),

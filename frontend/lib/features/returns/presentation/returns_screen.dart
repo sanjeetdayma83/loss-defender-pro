@@ -95,7 +95,7 @@ class _ReturnsScreenState extends State<ReturnsScreen> {
                   decoration: const InputDecoration(labelText: 'Order *', border: OutlineInputBorder()),
                   items: _orders.map((o) {
                     final m = o as Map;
-                    return DropdownMenuItem(
+                    return DropdownMenuItem<String>(
                       value: m['id']?.toString(),
                       child: Text(m['customerName']?.toString() ?? m['id']?.toString() ?? ''),
                     );
@@ -179,7 +179,7 @@ class _ReturnsScreenState extends State<ReturnsScreen> {
                   DropdownButtonFormField<String>(
                     value: selectedStatus,
                     decoration: const InputDecoration(labelText: 'New Status *', border: OutlineInputBorder()),
-                    items: allowed.map((s) => DropdownMenuItem(value: s, child: Text(s))).toList(),
+                    items: allowed.map<DropdownMenuItem<String>>((s) => DropdownMenuItem<String>(value: s, child: Text(s))).toList(),
                     onChanged: (v) => setLocal(() => selectedStatus = v),
                   ),
               ],

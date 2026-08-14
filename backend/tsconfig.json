@@ -1,4 +1,4 @@
-{
+﻿{
   "compilerOptions": {
     "module": "commonjs",
     "declaration": false,
@@ -12,14 +12,11 @@
     "baseUrl": "./",
     "incremental": true,
     "skipLibCheck": true,
-    "strictNullChecks": true,
+    "strictNullChecks": false,
     "noImplicitAny": false,
     "strictBindCallApply": false,
-    "forceConsistentCasingInFileNames": false,
-    "noFallthroughCasesInSwitch": false,
-    "esModuleInterop": true,
-    "moduleResolution": "node"
+    "forceConsistentCasingInFileNames": true,
+    "noFallthroughCasesInSwitch": false
   },
-  "include": ["src/**/*"],
   "exclude": ["node_modules", "dist", "**/*.spec.ts", "**/test-helpers.ts", "**/test-queues.module.ts"]
 }

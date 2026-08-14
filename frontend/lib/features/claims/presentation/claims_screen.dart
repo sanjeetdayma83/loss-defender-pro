@@ -88,10 +88,10 @@ class _ClaimsScreenState extends State<ClaimsScreen> {
                     value: orderId,
                     decoration: const InputDecoration(labelText: 'Order *', border: OutlineInputBorder()),
                     items: [
-                      const DropdownMenuItem(value: null, child: Text('— Select Order —')),
+                      const DropdownMenuItem<String>(value: null, child: Text('— Select Order —')),
                       ..._orders.map((o) {
                         final m = o as Map;
-                        return DropdownMenuItem(
+                        return DropdownMenuItem<String>(
                           value: m['id']?.toString(),
                           child: Text('${m['marketplaceOrderId'] ?? m['customerName'] ?? m['id']}'),
                         );
@@ -204,7 +204,7 @@ class _ClaimsScreenState extends State<ClaimsScreen> {
                   DropdownButtonFormField<String>(
                     value: selectedStatus,
                     decoration: const InputDecoration(labelText: 'New Status *', border: OutlineInputBorder()),
-                    items: allowed.map((s) => DropdownMenuItem(value: s, child: Text(s))).toList(),
+                    items: allowed.map<DropdownMenuItem<String>>((s) => DropdownMenuItem<String>(value: s, child: Text(s))).toList(),
                     onChanged: (v) => setLocal(() => selectedStatus = v),
                   ),
                 const SizedBox(height: 12),
@@ -356,9 +356,7 @@ class _ClaimsScreenState extends State<ClaimsScreen> {
         borderRadius: BorderRadius.circular(8),
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-          decoration: BoxDecoration(
-            border: Border(bottom: BorderSide(color: sel ? const Color(0xFF2563EB) : Colors.transparent, width: 2)),
-          ),
+          decoration: BoxDecoration(border: Border(bottom: BorderSide(color: sel ? const Color(0xFF2563EB) : Colors.transparent, width: 2))),
           child: Text(label, style: TextStyle(fontSize: 13, fontWeight: sel ? FontWeight.w700 : FontWeight.w500, color: sel ? const Color(0xFF2563EB) : AppColors.textSecondary)),
         ),
       ),
