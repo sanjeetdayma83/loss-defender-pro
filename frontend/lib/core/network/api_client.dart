@@ -7,7 +7,7 @@ class ApiClient {
       BaseOptions(
         baseUrl: const String.fromEnvironment(
           'API_BASE_URL',
-          defaultValue: 'http://localhost:3000/api/v1',
+          defaultValue: 'https://api.lossdefender.in/api/v1',
         ),
         connectTimeout: const Duration(seconds: 15),
         receiveTimeout: const Duration(seconds: 30),
@@ -15,7 +15,8 @@ class ApiClient {
           'Content-Type': 'application/json',
           'Accept': 'application/json',
         },
-        validateStatus: (status) => status != null && status >= 200 && status < 300,
+        validateStatus: (status) =>
+            status != null && status >= 200 && status < 300,
       ),
     );
 
@@ -35,7 +36,8 @@ class ApiClient {
           final path = error.requestOptions.path;
 
           // Avoid loop on auth endpoints
-          final isAuthPath = path.contains('/auth/login') ||
+          final isAuthPath =
+              path.contains('/auth/login') ||
               path.contains('/auth/register') ||
               path.contains('/auth/refresh');
 
@@ -96,9 +98,10 @@ class ApiClient {
           },
         ),
       );
-      final res = await bare.post('/auth/refresh', data: {
-        'refreshToken': refresh,
-      });
+      final res = await bare.post(
+        '/auth/refresh',
+        data: {'refreshToken': refresh},
+      );
 
       final body = res.data;
       final data = body is Map && body['data'] != null ? body['data'] : body;
