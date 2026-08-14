@@ -4,7 +4,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { FrameExtractorService, FrameExtractionOptions } from './frame-extractor.service';
 import { QUEUE_FRAME_EXTRACTION, FrameExtractionJobData, FrameExtractionJobResult } from './queue.constants';
 import { PrismaService } from '../prisma/prisma.service';
-import { EvidenceService } from '../evidence/evidence.service';
+
 
 @Processor(QUEUE_FRAME_EXTRACTION)
 @Injectable()
@@ -14,7 +14,6 @@ export class FrameExtractorWorker extends WorkerHost {
   constructor(
     private readonly frameExtractor: FrameExtractorService,
     private readonly prisma: PrismaService,
-    private readonly evidenceService: EvidenceService,
   ) {
     super();
   }
