@@ -240,10 +240,23 @@ export class AuthService {
     return { ok: true };
   }
 
-  async changePassword(userId: string, currentPassword: string, newPassword: string) {
+  async changePassword(userId: string, currentPassword: string, newPassword: string, otpCode?: string) {
     const user = await this.prisma.user.findFirst({ where: { id: userId } });
     if (!user) throw new NotFoundException('User not found');
-    if (!await bcrypt.compare(currentPassword, user.passwordHash)) throw new UnauthorizedException('Current password incorrect');
+        if (!otpCode) throw new BadRequestException('OTP required for password change');
+    const otp = await this.prisma.authOtp.findFirst({
+      where: {
+        email: user.email,
+        purpose: { in: ['change_password', 'sensitive'] },
+        code: otpCode,
+        usedAt: null,
+        expiresAt: { gt: new Date() },
+      } as any,
+      orderBy: { createdAt: 'desc' },
+    });
+    if (!otp) throw new BadRequestException('Invalid or expired OTP');
+    await this.prisma.authOtp.update({ where: { id: (otp as any).id }, data: { usedAt: new Date() } as any });
+if (!await bcrypt.compare(currentPassword, user.passwordHash)) throw new UnauthorizedException('Current password incorrect');
     if (await bcrypt.compare(newPassword, user.passwordHash)) throw new BadRequestException('New password must differ from current password');
     await this.assertPasswordNotReused(userId, newPassword);
     const newHash = await bcrypt.hash(newPassword, 12);

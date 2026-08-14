@@ -1,5 +1,5 @@
-import { GoogleOAuthService } from './oauth/google-oauth.service';
-import { Controller, Post, Get, Delete, Body, Param, Req } from '@nestjs/common';
+﻿import { GoogleOAuthService } from './oauth/google-oauth.service';
+import { Controller, Post, Get, Delete, Body, Param, Req , Query } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { OtpService } from './otp.service';
 import { RegisterDto, LoginDto, ForgotPasswordDto, ResetPasswordDto, VerifyEmailDto, RefreshDto, LogoutDto } from './dto/auth.dto';
@@ -41,7 +41,7 @@ export class AuthController {
   verify(@Body() dto: VerifyEmailDto) { return this.auth.verifyEmail(dto); }
 
   @Post('change-password') @ApiBearerAuth()
-  changePassword(@CurrentUser() u: AuthenticatedUser, @Body() dto: ChangePasswordDto) { return this.auth.changePassword(u.sub, dto.currentPassword, dto.newPassword); }
+  changePassword(@CurrentUser() u: AuthenticatedUser, @Body() dto: ChangePasswordDto) { return this.auth.changePassword(u.sub, dto.currentPassword, dto.newPassword, dto.otpCode); }
 
   @Public() @Throttle({ default: { limit: 5, ttl: 60000 } }) @Post('accept-invite')
   acceptInvite(@Body() dto: AcceptInviteDto) { return this.auth.acceptInvite(dto); }
@@ -61,4 +61,11 @@ export class AuthController {
   otpVerify(@Body() b: { email: string; purpose?: string; code: string }) { return this.otp.verify(b.email, b.purpose || 'sensitive', b.code); }
 
   @Public() @Get('google/start') googleStart() { return this.google.getStartUrl(); }
+
+
+  @Public()
+  @Get('google/callback')
+  googleCallback(@Query('code') code: string) {
+    return this.google.handleCallback(code);
+  }
 }

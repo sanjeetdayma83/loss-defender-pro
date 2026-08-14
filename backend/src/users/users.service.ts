@@ -1,3 +1,4 @@
+import { assertUserQuota } from '../common/utils/quota';
 import {
   Injectable,
   NotFoundException,
@@ -75,6 +76,7 @@ export class UsersService {
   }
 
   async invite(companyId: string, actorId: string, dto: InviteUserDto, ip?: string) {
+    await assertUserQuota(this.prisma, companyId);
     const exists = await this.prisma.user.findFirst({ where: { email: dto.email } });
     if (exists) throw new ConflictException('Email already registered');
     if (dto.warehouseId) {

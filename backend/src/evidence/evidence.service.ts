@@ -91,4 +91,28 @@ export class EvidenceService {
     if (!evidence) throw new NotFoundException('Evidence not found');
     throw new BadRequestException('Local filesystem extraction is disabled; upload/register a B2 recording segment instead');
   }
+  async getFrameUrl(companyId: string, evidenceId: string, frameId: string) {
+    const e = await this.prisma.evidence.findFirst({
+      where: { id: evidenceId, companyId },
+      include: { frames: true } as any,
+    });
+    if (!e) throw new NotFoundException('Evidence not found');
+    const frames = ((e as any).frames || []) as any[];
+    const frame =
+      frames.find((f: any) => f.id === frameId) ||
+      frames.find((f: any) => String(f.frameIndex ?? f.index ?? f.sequence) === String(frameId));
+    const key = frame?.b2Key || frame?.key || null;
+    if (!key) {
+      // fallback: pack metadata frames array
+      const meta = (e as any).overlays || (e as any).metadata;
+      const metaFrames = Array.isArray(meta?.frames) ? meta.frames : [];
+      const mf = metaFrames.find((f: any) => String(f.index ?? f.i) === String(frameId)) || metaFrames[Number(frameId)];
+      const mk = mf?.b2Key || mf?.key;
+      if (!mk) throw new NotFoundException('Frame not found or no storage key');
+      const signedMeta = await this.storage.presignGet(mk, 900);
+      return { frameId, key: mk, url: (signedMeta as any)?.url ?? signedMeta, expiresInSec: 900 };
+    }
+    const signed = await this.storage.presignGet(key, 900);
+    return { frameId, key, url: (signed as any)?.url ?? signed, expiresInSec: 900 };
+  }
 }

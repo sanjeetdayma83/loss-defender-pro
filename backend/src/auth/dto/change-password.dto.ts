@@ -11,4 +11,9 @@ export class ChangePasswordDto {
     message: 'Password must include upper, lower, and a number',
   })
   newPassword: string;
+
+  @IsString()
+  @MinLength(4)
+  @MaxLength(12)
+  otpCode: string;
 }

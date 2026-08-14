@@ -1,4 +1,5 @@
-﻿import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { NotificationsService } from '../notifications/notifications.service';
+import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 
 const ALLOWED: Record<string, string[]> = {
@@ -12,7 +13,7 @@ const ALLOWED: Record<string, string[]> = {
 
 @Injectable()
 export class ClaimsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly prisma: PrismaService, private readonly notifications: NotificationsService) {}
 
   list(companyId: string) {
     return this.prisma.claim.findMany({
@@ -52,6 +53,15 @@ export class ClaimsService {
       reason: data.reason,
     });
 
+    try {
+      await this.notifications.create(companyId, {
+        channel: 'in_app' as any,
+        title: 'Claim opened',
+        body: `Claim ${claim.id} created for order ${data.orderId}`,
+        data: { claimId: claim.id, orderId: data.orderId },
+      } as any);
+    } catch (_) {}
+
     return claim;
   }
 
@@ -85,6 +95,15 @@ export class ClaimsService {
       from: cur,
       to: status,
     });
+
+    try {
+      await this.notifications.create(companyId, {
+        channel: 'in_app' as any,
+        title: `Claim ${status}`,
+        body: `Claim ${id} is now ${status}`,
+        data: { claimId: id, status },
+      } as any);
+    } catch (_) { /* best-effort */ }
 
     return updated;
   }

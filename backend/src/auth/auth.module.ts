@@ -12,10 +12,12 @@ import { JwtRefreshStrategy } from './strategies/jwt-refresh.strategy';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { TenantGuard } from '../common/guards/tenant.guard';
+import { PermissionsGuard } from '../common/guards/permissions.guard';
+import { PrismaModule } from '../prisma/prisma.module';
 import { EmailModule } from '../email/email.module';
 
 @Module({
-  imports: [PassportModule, JwtModule.register({}), EmailModule],
+  imports: [PrismaModule, PassportModule, JwtModule.register({}), EmailModule],
   controllers: [RbacController, AuthController],
   providers: [GoogleOAuthService, OtpService,
     AuthService,
@@ -24,6 +26,7 @@ import { EmailModule } from '../email/email.module';
     { provide: APP_GUARD, useClass: JwtAuthGuard },
     { provide: APP_GUARD, useClass: TenantGuard },
     { provide: APP_GUARD, useClass: RolesGuard },
+    { provide: APP_GUARD, useClass: PermissionsGuard },
   ],
   exports: [AuthService, JwtModule],
 })

@@ -17,7 +17,7 @@ const PLANS = [
 @Controller('billing')
 export class BillingController {
   constructor(private readonly prisma: PrismaService, private readonly billing: BillingService) {}
-  @Public() @Get('plans') plans() { return PLANS; }
+  @Public() @Get('plans') plans() { return { plans: PLANS, razorpayConfigured: !!(process.env.RAZORPAY_KEY_ID && process.env.RAZORPAY_KEY_SECRET) }; }
   @Get('subscription') async subscription(@CurrentUser() u: AuthenticatedUser) { return this.billing.usage(u.companyId); }
   @Patch('subscription') @Roles(Role.owner, Role.super_admin)
   async setPlan(@CurrentUser() u: AuthenticatedUser, @Body() body: { plan: string }) {

@@ -1,4 +1,4 @@
-﻿import { Controller, Get, Post, Param, Body } from '@nestjs/common';
+import { Controller, Get, Post, Param, Body } from '@nestjs/common';
 import { EvidenceService } from './evidence.service';
 import { CurrentUser, AuthenticatedUser } from '../common/decorators/current-user.decorator';
 import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
@@ -27,6 +27,15 @@ export class EvidenceController {
     return this.evidence.getDownloadUrl(u.companyId, id);
   }
 
+  
+  @Get(':id/frames/:frameId/url')
+  frameUrl(
+    @CurrentUser() u: AuthenticatedUser,
+    @Param('id') id: string,
+    @Param('frameId') frameId: string,
+  ) {
+    return this.evidence.getFrameUrl(u.companyId, id, frameId);
+  }
   @Get(':id')
   getOne(@CurrentUser() u: AuthenticatedUser, @Param('id') id: string) {
     return this.evidence.getOne(u.companyId, id);
