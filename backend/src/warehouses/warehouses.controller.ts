@@ -10,6 +10,7 @@ import { CurrentUser, AuthenticatedUser } from '../common/decorators/current-use
 import { Roles } from '../common/decorators/roles.decorator';
 import { Role } from '@prisma/client';
 import { Request } from 'express';
+import { RequirePlanLimit } from '../common/guards/plan-limit.guard';
 
 @Controller('warehouses')
 export class WarehousesController {
@@ -25,6 +26,7 @@ export class WarehousesController {
     return this.warehouses.getOne(user.companyId, id);
   }
 
+  @RequirePlanLimit('warehouse')
   @Post()
   @Roles(Role.owner, Role.manager, Role.super_admin)
   create(

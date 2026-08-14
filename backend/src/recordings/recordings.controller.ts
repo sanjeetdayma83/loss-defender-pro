@@ -4,6 +4,7 @@ import { CurrentUser, AuthenticatedUser } from '../common/decorators/current-use
 import { IsUUID, IsOptional, IsNumber, IsString } from 'class-validator';
 import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
+import { RequirePlanLimit } from '../common/guards/plan-limit.guard';
 
 class StartRecordingDto {
   @IsUUID() orderId: string;
@@ -50,6 +51,7 @@ export class RecordingsController {
     return this.recordings.getOne(u.companyId, id);
   }
 
+  @RequirePlanLimit('recording')
   @Post('start')
   start(@CurrentUser() u: AuthenticatedUser, @Body() dto: StartRecordingDto) {
     const actorId = (u as any).id || (u as any).sub || (u as any).userId;

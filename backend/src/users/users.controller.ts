@@ -1,4 +1,5 @@
 import { RequirePermission } from '../common/guards/permissions.guard';
+import { RequirePlanLimit } from '../common/guards/plan-limit.guard';
 import { Controller, Get, Post, Patch, Body, Param, Req } from '@nestjs/common';
 import { UsersService } from './users.service';
 import { InviteUserDto, UpdateUserDto } from './dto/user.dto';
@@ -29,6 +30,7 @@ export class UsersController {
   }
 
   @RequirePermission('user.invite')
+  @RequirePlanLimit('user')
   @Post('invite')
   @Roles(Role.owner, Role.manager, Role.super_admin)
   invite(

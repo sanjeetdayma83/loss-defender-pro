@@ -13,6 +13,7 @@ import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { PermissionsGuard } from '../common/guards/permissions.guard';
 import { TenantGuard } from '../common/guards/tenant.guard';
+import { PlanLimitGuard } from '../common/guards/plan-limit.guard';
 import { EmailModule } from '../email/email.module';
 
 @Module({
@@ -26,6 +27,7 @@ import { EmailModule } from '../email/email.module';
     { provide: APP_GUARD, useClass: TenantGuard },
     { provide: APP_GUARD, useClass: RolesGuard },
     { provide: APP_GUARD, useClass: PermissionsGuard },
+    { provide: APP_GUARD, useClass: PlanLimitGuard },
   ],
   exports: [AuthService],
 })
