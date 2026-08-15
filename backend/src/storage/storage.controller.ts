@@ -1,20 +1,31 @@
-﻿import { Controller, Get, Post, Body } from '@nestjs/common';
+﻿import { Controller, Get, Post, Body, BadRequestException } from '@nestjs/common';
 import { StorageService } from './storage.service';
 import { CurrentUser, AuthenticatedUser } from '../common/decorators/current-user.decorator';
-import { IsString, IsOptional, IsInt, IsArray, ValidateNested, Min } from 'class-validator';
+import { IsString, IsOptional, IsInt, IsArray, ValidateNested, Min, IsIn } from 'class-validator';
 import { Type } from 'class-transformer';
 import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
+
+const ALLOWED_CONTENT_TYPES = [
+  'image/jpeg',
+  'image/png',
+  'image/webp',
+  'video/mp4',
+  'video/webm',
+  'video/quicktime',
+  'application/pdf',
+  'application/octet-stream',
+];
 
 class PresignDto {
   @IsString() purpose: string;
   @IsOptional() @IsString() filename?: string;
-  @IsOptional() @IsString() contentType?: string;
+  @IsOptional() @IsString() @IsIn(ALLOWED_CONTENT_TYPES) contentType?: string;
 }
 
 class InitMultipartDto {
   @IsString() purpose: string;
   @IsOptional() @IsString() filename?: string;
-  @IsOptional() @IsString() contentType?: string;
+  @IsOptional() @IsString() @IsIn(ALLOWED_CONTENT_TYPES) contentType?: string;
 }
 
 class PresignPartDto {
@@ -60,8 +71,12 @@ export class StorageController {
     @CurrentUser() u: AuthenticatedUser,
     @Body() dto: PresignDto,
   ) {
+    const contentType = dto.contentType || 'application/octet-stream';
+    if (!ALLOWED_CONTENT_TYPES.includes(contentType)) {
+      throw new BadRequestException(`Content type not allowed: ${contentType}`);
+    }
     const key = this.storage.buildKey(u.companyId, dto.purpose || 'misc', dto.filename);
-    return this.storage.presignPut(key, dto.contentType || 'application/octet-stream');
+    return this.storage.presignPut(key, contentType);
   }
 
   @Post('multipart/init')
@@ -70,8 +85,12 @@ export class StorageController {
     @CurrentUser() u: AuthenticatedUser,
     @Body() dto: InitMultipartDto,
   ) {
+    const contentType = dto.contentType || 'application/octet-stream';
+    if (!ALLOWED_CONTENT_TYPES.includes(contentType)) {
+      throw new BadRequestException(`Content type not allowed: ${contentType}`);
+    }
     const key = this.storage.buildKey(u.companyId, dto.purpose || 'misc', dto.filename);
-    return this.storage.initMultipart(key, dto.contentType || 'application/octet-stream');
+    return this.storage.initMultipart(key, contentType);
   }
 
   @Post('multipart/presign-part')

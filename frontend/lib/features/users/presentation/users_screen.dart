@@ -84,7 +84,9 @@ class _UsersScreenState extends State<UsersScreen> {
           return r.contains('operator') ||
               r == 'supervisor' ||
               r == 'packing_operator' ||
-              r == 'scanner_operator';
+              r == 'scanner_operator' ||
+              r == 'qc_operator' ||
+              r == 'dispatcher';
         }).toList();
       case 'pending':
         return list.where((u) {
@@ -112,22 +114,36 @@ class _UsersScreenState extends State<UsersScreen> {
   String _roleLabel(String? r) {
     switch (r) {
       case 'owner':
+        return 'Owner';
       case 'super_admin':
         return 'Super Admin';
       case 'manager':
         return 'Manager';
       case 'supervisor':
-        return 'Warehouse Lead';
+        return 'Supervisor';
       case 'packing_operator':
-        return 'Packing Station';
+        return 'Packing Operator';
       case 'scanner_operator':
         return 'Scanner Operator';
+      case 'qc_operator':
+        return 'QC Operator';
+      case 'claims_executive':
+        return 'Claims Executive';
+      case 'marketplace_manager':
+        return 'Marketplace Manager';
+      case 'warehouse_manager':
+        return 'Warehouse Manager';
       case 'dispatcher':
         return 'Dispatcher';
       case 'viewer':
         return 'Viewer';
       default:
-        return r ?? 'User';
+        if (r == null || r.isEmpty) return 'User';
+        // Fallback: humanize snake_case
+        return r
+            .split('_')
+            .map((w) => w[0].toUpperCase() + w.substring(1).toLowerCase())
+            .join(' ');
     }
   }
 
@@ -160,6 +176,10 @@ class _UsersScreenState extends State<UsersScreen> {
       'supervisor',
       'packing_operator',
       'scanner_operator',
+      'qc_operator',
+      'claims_executive',
+      'marketplace_manager',
+      'warehouse_manager',
       'dispatcher',
       'viewer',
     ];

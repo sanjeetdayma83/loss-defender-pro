@@ -137,6 +137,7 @@ model Warehouse {
   users      User[]
   orders     Order[]
   recordings Recording[]
+  evidence   Evidence[]
 
   @@unique([companyId, code])
   @@index([companyId, status])
@@ -392,6 +393,7 @@ model Evidence {
   companyId      String
   recordingId    String         @unique
   orderId        String
+  warehouseId    String
   status         EvidenceStatus @default(pending)
   frameCount     Int            @default(0)
   thumbnailKey   String?
@@ -406,10 +408,12 @@ model Evidence {
   company   Company         @relation(fields: [companyId], references: [id])
   recording Recording       @relation(fields: [recordingId], references: [id])
   order     Order           @relation(fields: [orderId], references: [id])
+  warehouse Warehouse       @relation(fields: [warehouseId], references: [id])
   frames    EvidenceFrame[]
 
   @@index([companyId, status])
   @@index([orderId])
+  @@index([warehouseId])
   @@map("evidence")
 }
 

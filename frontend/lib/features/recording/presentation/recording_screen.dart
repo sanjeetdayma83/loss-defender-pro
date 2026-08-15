@@ -2,6 +2,8 @@ import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import '../../../core/network/api_client.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/widgets/ui_kit.dart'
+    show StatusBadge;
 import 'recording_session_page.dart';
 import 'recording_detail_page.dart';
 
@@ -153,15 +155,7 @@ class _RecordingScreenState extends State<RecordingScreen> {
                                       ],
                                     ),
                                   ),
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                                    decoration: BoxDecoration(
-                                      color: status == 'completed' ? AppColors.success : AppColors.warning,
-                                      borderRadius: BorderRadius.circular(20),
-                                    ),
-                                    child: Text(status,
-                                        style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w600)),
-                                  ),
+                                  StatusBadge(status: status, small: true),
                                 ],
                               ),
                             );

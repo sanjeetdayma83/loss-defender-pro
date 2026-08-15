@@ -335,6 +335,7 @@ export class RecordingsService {
           companyId,
           orderId: rec.orderId,
           recordingId: rec.id,
+          warehouseId: rec.warehouseId,
           status: 'pending',
           frameCount,
         } as any,

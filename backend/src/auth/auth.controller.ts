@@ -1,6 +1,7 @@
 import { GoogleOAuthService } from './oauth/google-oauth.service';
 import {
   Controller, Post, Get, Delete, Body, Param, Req,
+  BadRequestException,
 } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { OtpService } from './otp.service';
@@ -110,12 +111,14 @@ export class AuthController {
   }
 
   @Public()
+  @Throttle({ default: { limit: 3, ttl: 60000 } })
   @Post('otp/request')
   otpRequest(@Body() body: { email: string; purpose?: string }) {
     return this.otp.request(body.email, body.purpose || 'sensitive');
   }
 
   @Public()
+  @Throttle({ default: { limit: 5, ttl: 60000 } })
   @Post('otp/verify')
   otpVerify(@Body() body: { email: string; purpose?: string; code: string }) {
     return this.otp.verify(body.email, body.purpose || 'sensitive', body.code);
@@ -124,6 +127,9 @@ export class AuthController {
   @Public()
   @Get('google/start')
   googleStart() {
+    if (process.env.NODE_ENV === 'production') {
+      throw new BadRequestException('Google OAuth not available in production');
+    }
     return this.google.getStartUrl();
   }
 
@@ -131,7 +137,7 @@ export class AuthController {
   @Get('oauth/providers')
   oauthProviders() {
     return {
-      google: Boolean(process.env.GOOGLE_CLIENT_ID),
+      google: false, // Disabled until PKCE implementation is complete
       microsoft: false,
     };
   }

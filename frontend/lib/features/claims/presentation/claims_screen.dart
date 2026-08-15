@@ -1,4 +1,5 @@
-import '../../../core/widgets/ui_kit.dart';
+import '../../../core/widgets/ui_kit.dart'
+    show StatusBadge;
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import '../../../core/network/api_client.dart';
@@ -315,22 +316,15 @@ class _ClaimsScreenState extends State<ClaimsScreen> {
                                     child: Column(
                                       crossAxisAlignment: CrossAxisAlignment.start,
                                       children: [
-                                        Text(c['title']?.toString() ?? c['reason']?.toString() ?? 'Claim', style: const TextStyle(fontWeight: FontWeight.w600)),
-                                        if (c['reason'] != null)
-                                          Text(c['reason'].toString(), style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+                                        Text(c['reason']?.toString() ?? 'Claim', style: const TextStyle(fontWeight: FontWeight.w600)),
+                                        if (c['description'] != null && c['description'].toString().isNotEmpty)
+                                          Text(c['description'].toString(), style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
                                         if (c['orderId'] != null)
                                           Text('Order: ${c['orderId']}', style: const TextStyle(fontSize: 11, color: AppColors.textSecondary)),
                                       ],
                                     ),
                                   ),
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                                    decoration: BoxDecoration(
-                                      color: status == 'open' ? AppColors.warning : (status == 'closed' || status == 'approved' || status == 'rejected' ? AppColors.success : AppColors.accent),
-                                      borderRadius: BorderRadius.circular(20),
-                                    ),
-                                    child: Text(status, style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w600)),
-                                  ),
+                                  StatusBadge(status: status, small: true),
                                   const SizedBox(width: 8),
                                   IconButton(
                                     icon: const Icon(Icons.edit_outlined, size: 18),

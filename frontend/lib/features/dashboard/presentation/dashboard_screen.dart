@@ -2,8 +2,20 @@ import 'package:dio/dio.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import '../../../core/network/api_client.dart';
-import '../../../core/theme/app_theme.dart';
-import '../../../core/widgets/ui_kit.dart';
+import '../../../core/theme/app_theme.dart'
+    show AppColors, AppTheme;
+import '../../../core/widgets/ui_kit.dart'
+    show SectionCard, KpiStrip, KpiItem, EmptyHint, StatusPill, StatusBadge;
+
+String _formatOrderId(Map<String, dynamic> order) {
+  final marketplaceOrderId = order['marketplaceOrderId']?.toString();
+  if (marketplaceOrderId != null && marketplaceOrderId.isNotEmpty) {
+    return marketplaceOrderId;
+  }
+  final id = order['id']?.toString() ?? '';
+  if (id.isEmpty) return '—';
+  return id.length > 8 ? id.substring(0, 8).toUpperCase() : id.toUpperCase();
+}
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -224,15 +236,17 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 ? const EmptyHint('No orders')
                 : Column(
                     children: _orders.take(8).map((o) {
-                      final m = o is Map ? o : <String, dynamic>{};
+                      final m = o is Map ? Map<String, dynamic>.from(o) : <String, dynamic>{};
+                      final displayId = _formatOrderId(m);
+                      final status = m['status']?.toString() ?? '';
                       return ListTile(
                         dense: true,
                         leading: CircleAvatar(
                           radius: 14,
-                          child: Text('${(m['marketplaceOrderId'] ?? m['id'] ?? '?')}'[0].toUpperCase()),
+                          child: Text(displayId.isNotEmpty ? displayId[0].toUpperCase() : '?'),
                         ),
-                        title: Text('${m['marketplaceOrderId'] ?? m['id'] ?? ''}'),
-                        trailing: StatusPill('${m['status'] ?? ''}', AppColors.accent),
+                        title: Text(displayId),
+                        trailing: StatusBadge(status: status, small: true),
                       );
                     }).toList(),
                   ),

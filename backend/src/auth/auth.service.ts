@@ -34,8 +34,7 @@ export class AuthService {
     return this.jwt.signAsync({ ...payload, jti }, {
       secret:
         this.config.get<string>('jwt.accessSecret') ??
-        process.env.JWT_ACCESS_SECRET ??
-        'dev-access',
+        process.env.JWT_ACCESS_SECRET,
       expiresIn:
         this.config.get<string>('jwt.accessExpiresIn') ?? '15m',
     } as any);

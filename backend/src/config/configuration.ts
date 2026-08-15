@@ -2,8 +2,8 @@
   port: parseInt(process.env.PORT ?? '3000', 10),
   database: { url: process.env.DATABASE_URL },
   jwt: {
-    accessSecret: process.env.JWT_ACCESS_SECRET ?? process.env.JWT_SECRET ?? 'dev-access-secret-change-me',
-    refreshSecret: process.env.JWT_REFRESH_SECRET ?? 'dev-refresh-secret-change-me',
+    accessSecret: process.env.JWT_ACCESS_SECRET ?? process.env.JWT_SECRET,
+    refreshSecret: process.env.JWT_REFRESH_SECRET,
     accessExpiresIn: process.env.JWT_ACCESS_EXPIRES ?? '15m',
     refreshExpiresIn: process.env.JWT_REFRESH_EXPIRES ?? '7d',
   },

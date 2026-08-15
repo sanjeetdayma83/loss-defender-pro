@@ -1,5 +1,6 @@
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
+import 'dart:async';
 import '../../../core/network/api_client.dart';
 import '../../../core/theme/app_theme.dart';
 
@@ -55,31 +56,43 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
       _error = null;
     });
     try {
-      final results = await Future.wait([
-        ApiClient.instance.dio.get('/orders').catchError((_) => null),
-        ApiClient.instance.dio.get('/warehouses').catchError((_) => null),
-        ApiClient.instance.dio.get('/users').catchError((_) => null),
-        ApiClient.instance.dio.get('/recordings').catchError((_) => null),
-        ApiClient.instance.dio.get('/evidence').catchError((_) => null),
-        ApiClient.instance.dio.get('/claims').catchError((_) => null),
-        ApiClient.instance.dio.get('/companies/me').catchError((_) => null),
-        ApiClient.instance.dio.get('/analytics/kpis').catchError((_) => null),
-      ]);
+      // Helper to safely fetch and return null on error
+      Future<Response<dynamic>?> safeGet(String path) async {
+        try {
+          return await ApiClient.instance.dio.get(path);
+        } on DioException {
+          return null;
+        }
+      }
 
-      final orders = results[0] != null ? _asList(results[0].data) : <dynamic>[];
+      // Add a 15-second timeout for the entire analytics load
+      final results = await Future.wait([
+        safeGet('/orders'),
+        safeGet('/warehouses'),
+        safeGet('/users'),
+        safeGet('/recordings'),
+        safeGet('/evidence'),
+        safeGet('/claims'),
+        safeGet('/companies/me'),
+        safeGet('/analytics/kpis'),
+      ]).timeout(const Duration(seconds: 15), onTimeout: () {
+        throw Exception('Analytics load timed out. Please try again.');
+      });
+
+      final orders = results[0] != null ? _asList(results[0]!.data) : <dynamic>[];
       final warehouses =
-          results[1] != null ? _asList(results[1].data) : <dynamic>[];
-      final users = results[2] != null ? _asList(results[2].data) : <dynamic>[];
+          results[1] != null ? _asList(results[1]!.data) : <dynamic>[];
+      final users = results[2] != null ? _asList(results[2]!.data) : <dynamic>[];
       final recordings =
-          results[3] != null ? _asList(results[3].data) : <dynamic>[];
+          results[3] != null ? _asList(results[3]!.data) : <dynamic>[];
       final evidence =
-          results[4] != null ? _asList(results[4].data) : <dynamic>[];
+          results[4] != null ? _asList(results[4]!.data) : <dynamic>[];
       final claims =
-          results[5] != null ? _asList(results[5].data) : <dynamic>[];
+          results[5] != null ? _asList(results[5]!.data) : <dynamic>[];
       final company =
-          results[6] != null ? _asMap(results[6].data) : null;
+          results[6] != null ? _asMap(results[6]!.data) : null;
       final kpis =
-          results[7] != null ? _asMap(results[7].data) : null;
+          results[7] != null ? _asMap(results[7]!.data) : null;
 
       final statusMap = <String, int>{};
       var verified = 0;
@@ -123,7 +136,14 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
         _recentOrders = orders.take(6).toList();
         _loading = false;
       });
+    } on TimeoutException catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _error = 'Analytics load timed out. Please check your connection and try again.';
+        _loading = false;
+      });
     } catch (e) {
+      if (!mounted) return;
       setState(() {
         _error = e.toString();
         _loading = false;

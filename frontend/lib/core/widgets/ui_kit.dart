@@ -1,6 +1,8 @@
 ﻿import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 
+export 'status_badge.dart';
+
 class KpiStrip extends StatelessWidget {
   final List<KpiItem> items;
   const KpiStrip({super.key, required this.items});

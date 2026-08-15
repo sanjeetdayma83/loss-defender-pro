@@ -2,7 +2,8 @@ import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import '../../../core/network/api_client.dart';
 import '../../../core/theme/app_theme.dart';
-import '../../../core/widgets/app_dialogs.dart';
+import '../../../core/widgets/ui_kit.dart'
+    show StatusBadge;
 
 class ReturnsScreen extends StatefulWidget {
   const ReturnsScreen({super.key});
@@ -284,14 +285,7 @@ class _ReturnsScreenState extends State<ReturnsScreen> {
                                       ],
                                     ),
                                   ),
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                                    decoration: BoxDecoration(
-                                      color: status == 'requested' ? AppColors.warning : (status == 'rejected' || status == 'closed' ? AppColors.danger : (status == 'refunded' || status == 'restocked' ? AppColors.success : AppColors.accent)),
-                                      borderRadius: BorderRadius.circular(20),
-                                    ),
-                                    child: Text(status, style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w600)),
-                                  ),
+                                  StatusBadge(status: status, small: true),
                                   const SizedBox(width: 8),
                                   IconButton(icon: const Icon(Icons.edit_outlined, size: 18), onPressed: () => _showStatusDialog(r), tooltip: 'Update Status'),
                                 ],

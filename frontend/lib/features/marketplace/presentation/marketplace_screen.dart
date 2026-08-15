@@ -209,20 +209,25 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
         const SizedBox(height: 20),
         const Text('Add channel', style: TextStyle(fontWeight: FontWeight.w600)),
         const SizedBox(height: 8),
-        ...channels
-            .where((ch) => isFeatureEnabled('marketplace.${ch.provider}'))
-            .map((ch) => Card(
-              child: ListTile(
-                leading: CircleAvatar(
-                  backgroundColor: AppColors.accent.withOpacity(0.12),
-                  child: Icon(ch.icon, color: AppColors.accent),
-                ),
-                title: Text(ch.name),
-                subtitle: Text(ch.subtitle),
-                trailing: const Icon(Icons.add),
-                onTap: () => _connect(ch.provider),
+        ...channels.map((ch) {
+          final enabled = isFeatureEnabled('marketplace.${ch.provider}');
+          final info = getFeatureInfo('marketplace.${ch.provider}');
+          return Card(
+            child: ListTile(
+              leading: CircleAvatar(
+                backgroundColor: enabled
+                    ? AppColors.accent.withOpacity(0.12)
+                    : AppColors.textSecondary.withOpacity(0.12),
+                child: Icon(ch.icon, color: enabled ? AppColors.accent : AppColors.textSecondary),
               ),
-            )),
+              title: Text(ch.name, style: TextStyle(color: enabled ? null : AppColors.textSecondary)),
+              subtitle: Text(enabled ? ch.subtitle : 'Coming soon — ${info?['reason'] ?? 'Not implemented'}',
+                  style: TextStyle(color: enabled ? null : AppColors.textSecondary)),
+              trailing: enabled ? const Icon(Icons.add) : const Icon(Icons.lock_outline, color: AppColors.textSecondary),
+              onTap: enabled ? () => _connect(ch.provider) : null,
+            ),
+          );
+        }),
       ],
     );
   }

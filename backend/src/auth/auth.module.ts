@@ -4,6 +4,7 @@ import { Module } from '@nestjs/common';
 import { JwtModule } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
 import { APP_GUARD } from '@nestjs/core';
+import { ConfigModule, ConfigService } from '@nestjs/config';
 import { AuthService } from './auth.service';
 import { OtpService } from './otp.service';
 import { AuthController } from './auth.controller';
@@ -18,7 +19,7 @@ import { EmailModule } from '../email/email.module';
 import { PrismaModule } from '../prisma/prisma.module';
 
 @Module({
-  imports: [PassportModule, JwtModule.register({}), EmailModule, PrismaModule],
+  imports: [PassportModule, JwtModule.register({}), EmailModule, PrismaModule, ConfigModule],
   controllers: [RbacController, AuthController],
   providers: [GoogleOAuthService, OtpService, 
     AuthService,

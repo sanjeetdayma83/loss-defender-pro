@@ -255,6 +255,38 @@ class _ScannerScreenState extends State<ScannerScreen> {
                     final raw = capture.barcodes.isEmpty ? null : capture.barcodes.first.rawValue;
                     if (raw != null && raw.isNotEmpty) _submit(raw);
                   },
+                  errorBuilder: (context, error) {
+                    String message = 'Camera error';
+                    final errorCode = error.errorCode.name;
+                    if (errorCode == 'permissionDenied' || error.errorDetails?.toString().toLowerCase().contains('permission') == true) {
+                      message = 'Camera permission denied. Please allow camera access in browser settings to scan barcodes.';
+                    } else if (errorCode == 'notFound') {
+                      message = 'No camera found on this device.';
+                    } else if (errorCode == 'notReadable') {
+                      message = 'Camera is in use by another application. Please close other apps using the camera.';
+                    } else {
+                      message = 'Camera error: ${error.errorDetails ?? errorCode}';
+                    }
+                    return Center(
+                      child: Padding(
+                        padding: const EdgeInsets.all(24),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(Icons.videocam_off, size: 48, color: Colors.red),
+                            const SizedBox(height: 12),
+                            Text(message, textAlign: TextAlign.center, style: const TextStyle(color: Colors.red)),
+                            const SizedBox(height: 16),
+                            FilledButton.icon(
+                              onPressed: () => setState(() => _cameraOn = false),
+                              icon: const Icon(Icons.close),
+                              label: const Text('Close Camera'),
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
                 ),
               ),
             )

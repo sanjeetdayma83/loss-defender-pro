@@ -5,6 +5,29 @@ import '../../../core/network/api_client.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/app_dialogs.dart';
 
+String _formatOrderId(Map<String, dynamic> order) {
+  final marketplaceOrderId = order['marketplaceOrderId']?.toString();
+  if (marketplaceOrderId != null && marketplaceOrderId.isNotEmpty) {
+    return marketplaceOrderId;
+  }
+  final id = order['id']?.toString() ?? '';
+  if (id.isEmpty) return '—';
+  // Return first 8 chars of UUID for readability
+  return id.length > 8 ? id.substring(0, 8).toUpperCase() : id.toUpperCase();
+}
+
+String _formatItemsSummary(Map<String, dynamic> order) {
+  final items = order['items'] as List<dynamic>?;
+  if (items == null || items.isEmpty) return 'No items';
+  if (items.length == 1) {
+    final item = items.first as Map<String, dynamic>;
+    final sku = item['sku']?.toString() ?? '';
+    final qty = item['qty']?.toString() ?? '';
+    return '$sku × $qty';
+  }
+  return '${items.length} items';
+}
+
 class OrdersScreen extends StatefulWidget {
   const OrdersScreen({super.key});
 
@@ -243,30 +266,6 @@ class _OrdersScreenState extends State<OrdersScreen> {
     }
   }
 
-  Color _statusColor(String s) {
-    switch (s.toLowerCase()) {
-      case 'dispatched':
-      case 'shipped':
-      case 'closed':
-      case 'verified':
-      case 'scanned':
-        return const Color(0xFF22C55E);
-      case 'packing':
-      case 'recording':
-      case 'queued':
-      case 'synced':
-      case 'pending':
-        return const Color(0xFFF59E0B);
-      case 'claimed':
-      case 'returned':
-      case 'failed':
-      case 'exception':
-        return const Color(0xFFEF4444);
-      default:
-        return const Color(0xFF3B82F6);
-    }
-  }
-
   String _fmtDate(String? iso) {
     if (iso == null) return '—';
     try {
@@ -429,9 +428,8 @@ class _OrdersScreenState extends State<OrdersScreen> {
                           itemBuilder: (context, i) {
                             final o = filtered[i] as Map<String, dynamic>;
                             final status = o['status']?.toString() ?? '';
-                            final orderId = o['marketplaceOrderId']?.toString() ??
-                                o['id']?.toString() ??
-                                '—';
+                            final displayId = _formatOrderId(o);
+                            final itemsSummary = _formatItemsSummary(o);
                             final awb = o['awb']?.toString() ??
                                 o['trackingNumber']?.toString() ??
                                 '—';
@@ -439,70 +437,64 @@ class _OrdersScreenState extends State<OrdersScreen> {
                             final whName = wh is Map
                                 ? wh['name']?.toString()
                                 : o['warehouseId']?.toString();
-                            final sc = _statusColor(status);
+                            final marketplace = o['marketplace']?.toString() ?? 'manual';
 
-                            return Container(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 16, vertical: 14),
-                              decoration: BoxDecoration(
-                                color: Colors.white,
-                                borderRadius: BorderRadius.circular(12),
-                                border: Border.all(color: AppColors.border),
-                              ),
-                              child: Row(
-                                children: [
-                                  Expanded(
-                                    flex: 2,
-                                    child: Text(orderId,
-                                        style: const TextStyle(
-                                            fontWeight: FontWeight.w700,
-                                            fontSize: 13,
-                                            color: Color(0xFF2563EB))),
-                                  ),
-                                  if (isWide)
+                            return InkWell(
+                              onTap: () => AppDialogs.info(context,
+                                  title: displayId,
+                                  message: 'Status: $status\nItems: $itemsSummary\nAWB: $awb\nWarehouse: ${whName ?? '—'}\nMarketplace: $marketplace'),
+                              borderRadius: BorderRadius.circular(12),
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 16, vertical: 14),
+                                decoration: BoxDecoration(
+                                  color: Colors.white,
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(color: AppColors.border),
+                                ),
+                                child: Row(
+                                  children: [
                                     Expanded(
                                       flex: 2,
-                                      child: Text(awb,
-                                          style: const TextStyle(fontSize: 12)),
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Text(displayId,
+                                              style: const TextStyle(
+                                                  fontWeight: FontWeight.w700,
+                                                  fontSize: 13,
+                                                  color: Color(0xFF2563EB))),
+                                          if (isWide)
+                                            Text(itemsSummary,
+                                                style: const TextStyle(
+                                                    fontSize: 11,
+                                                    color: AppColors.textSecondary)),
+                                        ],
+                                      ),
                                     ),
-                                  if (isWide)
-                                    Expanded(
-                                      flex: 2,
-                                      child: Text(whName ?? '—',
-                                          style: const TextStyle(fontSize: 12)),
+                                    if (isWide)
+                                      Expanded(
+                                        flex: 2,
+                                        child: Text(awb,
+                                            style: const TextStyle(fontSize: 12)),
+                                      ),
+                                    if (isWide)
+                                      Expanded(
+                                        flex: 2,
+                                        child: Text(whName ?? '—',
+                                            style: const TextStyle(fontSize: 12)),
+                                      ),
+                                    StatusBadge(status: status, small: true),
+                                    const SizedBox(width: 12),
+                                    SizedBox(
+                                      width: 90,
+                                      child: Text(_fmtDate(o['createdAt']?.toString()),
+                                          style: const TextStyle(
+                                              fontSize: 11,
+                                              color: AppColors.textSecondary)),
                                     ),
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(
-                                        horizontal: 10, vertical: 4),
-                                    decoration: BoxDecoration(
-                                      color: sc.withOpacity(0.12),
-                                      borderRadius: BorderRadius.circular(20),
-                                    ),
-                                    child: Text(status.toUpperCase(),
-                                        style: TextStyle(
-                                            fontSize: 10,
-                                            fontWeight: FontWeight.w700,
-                                            color: sc)),
-                                  ),
-                                  const SizedBox(width: 12),
-                                  SizedBox(
-                                    width: 90,
-                                    child: Text(_fmtDate(o['createdAt']?.toString()),
-                                        style: const TextStyle(
-                                            fontSize: 11,
-                                            color: AppColors.textSecondary)),
-                                  ),
-                                  IconButton(
-                                    icon: const Icon(Icons.visibility_outlined,
-                                        size: 18),
-                                    onPressed: () {
-                                      AppDialogs.info(context,
-                                          title: orderId,
-                                          message:
-                                              'Status: $status\nAWB: $awb\nWarehouse: ${whName ?? '—'}');
-                                    },
-                                  ),
-                                ],
+                                  ],
+                                ),
                               ),
                             );
                           },

@@ -2,7 +2,8 @@ import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import '../../../core/network/api_client.dart';
 import '../../../core/theme/app_theme.dart';
-import '../../../core/widgets/app_dialogs.dart';
+import '../../../core/widgets/ui_kit.dart'
+    show StatusBadge;
 
 class DispatchScreen extends StatefulWidget {
   const DispatchScreen({super.key});
@@ -57,7 +58,6 @@ class _DispatchScreenState extends State<DispatchScreen> {
   bool _isReady(String s) =>
       ['scanned', 'evidence_ready', 'packing', 'recording', 'queued'].contains(s);
   bool _isDispatched(String s) => s == 'dispatched';
-  bool _isShipped(String s) => s == 'shipped' || s == 'closed';
   bool _isException(String s) =>
       ['claimed', 'returned', 'failed', 'exception'].contains(s);
 
@@ -317,19 +317,7 @@ class _DispatchScreenState extends State<DispatchScreen> {
                 Expanded(
                   child: Text(awb, style: const TextStyle(fontSize: 12)),
                 ),
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF3B82F6).withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: Text(status,
-                      style: const TextStyle(
-                          fontSize: 10,
-                          fontWeight: FontWeight.w700,
-                          color: Color(0xFF2563EB))),
-                ),
+                StatusBadge(status: status, small: true),
                 const SizedBox(width: 8),
                 if (_isReady(status.toLowerCase()))
                   IconButton(

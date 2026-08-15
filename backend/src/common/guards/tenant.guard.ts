@@ -3,6 +3,7 @@
   ForbiddenException, UnauthorizedException,
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
+import { ConfigService } from '@nestjs/config';
 import { IS_PUBLIC_KEY } from '../decorators/public.decorator';
 import { PrismaService } from '../../prisma/prisma.service';
 
@@ -11,6 +12,7 @@ export class TenantGuard implements CanActivate {
   constructor(
     private readonly reflector: Reflector,
     private readonly prisma: PrismaService,
+    private readonly config: ConfigService,
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
@@ -28,6 +30,14 @@ export class TenantGuard implements CanActivate {
     if (user.role === 'super_admin') {
       const headerTenant = request.headers['x-tenant-id'] as string | undefined;
       if (headerTenant) {
+        // Validate against allowlist from env
+        const allowlist = this.config.get<string>('SUPER_ADMIN_TENANT_ALLOWLIST');
+        if (allowlist) {
+          const allowed = allowlist.split(',').map(s => s.trim()).filter(Boolean);
+          if (!allowed.includes(headerTenant)) {
+            throw new ForbiddenException('Tenant not in super-admin allowlist');
+          }
+        }
         // Validate that the tenant exists and is active
         const tenant = await this.prisma.company.findFirst({
           where: { id: headerTenant, status: 'active' },

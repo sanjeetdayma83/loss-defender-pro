@@ -22,6 +22,22 @@ class ApiClient {
 
     _dio.interceptors.add(
       InterceptorsWrapper(
+        onError: (error, handler) {
+          // We can't modify DioException.message directly as it's final
+          // Instead, we'll add the friendly message to error.response.data for easy access
+          if (error.response != null && error.response!.data is Map) {
+            final data = Map<String, dynamic>.from(error.response!.data as Map);
+            data['friendlyMessage'] = _mapToFriendlyMessage(error);
+            // Note: We can't easily modify the response data in the interceptor
+            // The friendly message will be computed in the UI layer using the static method
+          }
+          handler.next(error);
+        },
+      ),
+    );
+
+    _dio.interceptors.add(
+      InterceptorsWrapper(
         onRequest: (options, handler) async {
           try {
             final token = await SecureStorage.instance.getAccessToken();
@@ -119,5 +135,58 @@ class ApiClient {
     } catch (_) {
       return false;
     }
+  }
+
+  static String _mapToFriendlyMessage(DioException error) {
+    final status = error.response?.statusCode;
+    final data = error.response?.data;
+
+    if (status == null) {
+      if (error.type == DioExceptionType.connectionTimeout ||
+          error.type == DioExceptionType.receiveTimeout ||
+          error.type == DioExceptionType.sendTimeout) {
+        return 'Request timed out. Please check your connection and try again.';
+      }
+      if (error.type == DioExceptionType.connectionError) {
+        return 'Network error. Please check your internet connection.';
+      }
+      return 'Something went wrong. Please try again.';
+    }
+
+    // Server responded with error status
+    if (status == 400) {
+      return data is Map
+          ? (data['message']?.toString() ?? 'Invalid request. Please check your input.')
+          : 'Invalid request. Please check your input and try again.';
+    }
+    if (status == 401) {
+      return 'Your session has expired. Please log in again.';
+    }
+    if (status == 403) {
+      return "You don't have permission to access this resource.";
+    }
+    if (status == 404) {
+      return 'The requested resource was not found.';
+    }
+    if (status == 409) {
+      return data is Map
+          ? (data['message']?.toString() ?? 'A conflict occurred.')
+          : 'This item already exists or a conflict occurred.';
+    }
+    if (status == 422) {
+      return data is Map
+          ? (data['message']?.toString() ?? 'Validation failed. Please check your input.')
+          : 'Validation failed. Please check your input.';
+    }
+    if (status == 429) {
+      return 'Too many requests. Please wait a moment and try again.';
+    }
+    if (status >= 500) {
+      return 'Something went wrong on our end. Please try again later.';
+    }
+
+    return data is Map
+        ? (data['message']?.toString() ?? 'An unexpected error occurred.')
+        : 'An unexpected error occurred. Please try again.';
   }
 }

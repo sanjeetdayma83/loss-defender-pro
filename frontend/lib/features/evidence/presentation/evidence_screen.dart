@@ -2,7 +2,8 @@ import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import '../../../core/network/api_client.dart';
 import '../../../core/theme/app_theme.dart';
-import '../../../core/widgets/ui_kit.dart';
+import '../../../core/widgets/ui_kit.dart'
+    show EmptyHint, StatusBadge;
 import 'evidence_detail_page.dart';
 
 class EvidenceScreen extends StatefulWidget {
@@ -37,7 +38,7 @@ class _EvidenceScreenState extends State<EvidenceScreen> {
       });
     } on DioException catch (e) {
       setState(() {
-        _error = e.message;
+        _error = e.message ?? 'Failed to load evidence';
         _loading = false;
       });
     }
@@ -68,7 +69,18 @@ class _EvidenceScreenState extends State<EvidenceScreen> {
   Widget build(BuildContext context) {
     if (_loading) return const Center(child: CircularProgressIndicator());
     if (_error != null) {
-      return Center(child: TextButton(onPressed: _load, child: Text('Retry: $_error')));
+      return Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.error_outline, size: 48, color: Colors.red),
+            const SizedBox(height: 12),
+            Text(_error!, textAlign: TextAlign.center, style: const TextStyle(color: Colors.red)),
+            const SizedBox(height: 16),
+            FilledButton.icon(onPressed: _load, icon: const Icon(Icons.refresh), label: const Text('Retry')),
+          ],
+        ),
+      );
     }
 
     return RefreshIndicator(
@@ -128,7 +140,7 @@ class _EvidenceScreenState extends State<EvidenceScreen> {
                                   const SizedBox(height: 4),
                                   Row(
                                     children: [
-                                      StatusPill('${e['status'] ?? '—'}', AppColors.accent),
+                                      StatusBadge(status: e['status']?.toString() ?? '—', small: true),
                                       const Spacer(),
                                       Text('${e['frameCount'] ?? 0} f',
                                           style: const TextStyle(fontSize: 11, color: AppColors.textSecondary)),

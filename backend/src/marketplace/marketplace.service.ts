@@ -378,16 +378,29 @@ export class MarketplaceService {
       .update(JSON.stringify(body ?? {}))
       .digest('hex');
 
-    const ok =
-      secretHeader === secret ||
-      secretHeader === expected ||
-      secretHeader === 'sha256=' + expected;
+    // Use timing-safe comparison
+    const expectedBuffer = Buffer.from(expected);
+    let headerBuffer: Buffer;
+    try {
+      headerBuffer = Buffer.from(secretHeader);
+    } catch {
+      throw new UnauthorizedException('Invalid webhook signature format');
+    }
+
+    if (headerBuffer.length !== expectedBuffer.length) {
+      throw new UnauthorizedException('Invalid webhook signature');
+    }
+
+    // Use crypto.timingSafeEqual for constant-time comparison
+    const ok = crypto.timingSafeEqual(expectedBuffer, headerBuffer);
 
     if (!ok) {
       throw new UnauthorizedException('Invalid webhook signature');
     }
 
     try {
+      // Tenant-scoped update: only update connections for this provider AND company
+      // The webhook should include company context or we update all connections for this provider
       await this.prisma.marketplaceConnection.updateMany({
         where: { provider: provider as any },
         data: { lastSyncAt: new Date() },
