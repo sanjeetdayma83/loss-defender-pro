@@ -1,4 +1,4 @@
-﻿-- CreateTable
+-- CreateTable
 CREATE TABLE "login_attempts" (
     "id" TEXT NOT NULL,
     "ip" TEXT NOT NULL,
