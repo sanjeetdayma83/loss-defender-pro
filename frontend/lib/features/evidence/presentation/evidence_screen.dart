@@ -38,7 +38,7 @@ class _EvidenceScreenState extends State<EvidenceScreen> {
       });
     } on DioException catch (e) {
       setState(() {
-        _error = e.message ?? 'Failed to load evidence';
+        _error = ApiClient.mapToFriendlyMessage(e);
         _loading = false;
       });
     }

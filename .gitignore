@@ -23,9 +23,11 @@ frontend/build/
 .DS_Store
 Thumbs.db
 
+# Temp files
 *.bak
 *.tmp
 *.old
+tmp-*.js
 schema.current*
 backend/coverage/
 

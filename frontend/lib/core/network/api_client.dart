@@ -27,7 +27,7 @@ class ApiClient {
           // Instead, we'll add the friendly message to error.response.data for easy access
           if (error.response != null && error.response!.data is Map) {
             final data = Map<String, dynamic>.from(error.response!.data as Map);
-            data['friendlyMessage'] = _mapToFriendlyMessage(error);
+            data['friendlyMessage'] = ApiClient.mapToFriendlyMessage(error);
             // Note: We can't easily modify the response data in the interceptor
             // The friendly message will be computed in the UI layer using the static method
           }
@@ -137,7 +137,7 @@ class ApiClient {
     }
   }
 
-  static String _mapToFriendlyMessage(DioException error) {
+  static String mapToFriendlyMessage(DioException error) {
     final status = error.response?.statusCode;
     final data = error.response?.data;
 
